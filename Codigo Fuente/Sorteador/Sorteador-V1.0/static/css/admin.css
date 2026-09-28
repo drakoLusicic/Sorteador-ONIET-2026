@@ -1,0 +1,538 @@
+/* Ventana del administrador: simple y legible, no se proyecta. */
+:root {
+  --bg: #121212;
+  --panel: #1c1c1c;
+  --borde: #333333;
+  --texto: #f2f2f2;
+  --texto-suave: #a0a0a0;
+  --acento: #e5198a;
+  --acento-2: #ff8a3d;
+  --ok: #4ade80;
+  --error: #f87171;
+  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--fuente);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--texto);
+  background: var(--bg);
+}
+
+/* Controles a la izquierda y la columna de ganadores a la derecha; en
+   ventanas angostas, los ganadores quedan abajo. */
+.admin {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 14px;
+  align-items: start;
+}
+
+.principal {
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cabecera h1 {
+  font-size: 1.25rem;
+}
+
+.conexion {
+  margin-top: 2px;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+.conexion::before {
+  content: '●';
+  margin-right: 6px;
+}
+
+.conexion.ok::before {
+  color: var(--ok);
+}
+
+.conexion.error::before {
+  color: var(--error);
+}
+
+.conexion a {
+  color: var(--texto);
+}
+
+.bloque {
+  padding: 14px 16px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.bloque h2 {
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.ayuda {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.ayuda:empty {
+  display: none;
+}
+
+/* Sorteo */
+.estado-sorteo {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.acciones {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+
+/* Botones */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  color: var(--texto);
+  padding: 8px 16px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #2a2a2a;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--texto-suave);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--acento-2);
+  outline-offset: 2px;
+}
+
+.btn-principal {
+  flex: 1;
+  padding: 14px 20px;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border: none;
+  background: linear-gradient(90deg, var(--acento), var(--acento-2));
+}
+
+.btn-principal:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.acciones .btn:not(.btn-principal) {
+  padding-inline: 20px;
+}
+
+.btn-chico {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+
+/* Premios */
+.premios {
+  list-style: none;
+  margin: 10px 0;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.premios:empty::before {
+  content: 'No hay premios cargados.';
+  display: block;
+  padding: 10px 12px;
+  color: var(--texto-suave);
+}
+
+.premio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+}
+
+.premio + .premio {
+  border-top: 1px solid var(--borde);
+}
+
+.premio label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.premio input {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--acento);
+}
+
+.premio-nombre {
+  overflow-wrap: anywhere;
+}
+
+.premio.actual {
+  background: rgba(229, 25, 138, 0.14);
+}
+
+.premio.actual .premio-nombre {
+  font-weight: 700;
+}
+
+.premio-detalle {
+  flex-shrink: 0;
+  max-width: 45%;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+  text-align: right;
+}
+
+.premio.actual .premio-detalle {
+  color: var(--acento-2);
+  font-weight: 600;
+}
+
+.btn-quitar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  font: inherit;
+  color: var(--texto-suave);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.btn-quitar:hover {
+  color: var(--error);
+  border-color: var(--borde);
+}
+
+.form-premio {
+  display: flex;
+  gap: 8px;
+}
+
+input[type='text'],
+select {
+  font: inherit;
+  color: var(--texto);
+  padding: 7px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #111111;
+}
+
+.form-premio input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Listado */
+.campo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.campo select {
+  flex: 1;
+}
+
+select:disabled {
+  opacity: 0.5;
+}
+
+.fila-participantes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+/* Columna de ganadores: queda fija al costado y se desplaza sola si son muchos. */
+.lateral {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+}
+
+@media (max-width: 760px) {
+  .lateral {
+    position: static;
+    max-height: none;
+  }
+}
+
+.cantidad {
+  margin-left: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #2a2a2a;
+  color: var(--texto);
+  letter-spacing: normal;
+}
+
+.cantidad:empty {
+  display: none;
+}
+
+.ganadores {
+  list-style: none;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+
+.ganadores:empty::before {
+  content: 'Todavía no hay ganadores.';
+  display: block;
+  padding: 4px 0;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+.ganador {
+  display: grid;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 8px 0;
+}
+
+.ganador + .ganador {
+  border-top: 1px solid var(--borde);
+}
+
+.ganador-numero {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+  text-align: right;
+}
+
+.ganador-nombre {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ganador-id,
+.ganador-hora {
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+}
+
+.ganador-id {
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.ganador-premio {
+  grid-column: 2 / -1;
+  font-size: 0.85rem;
+  color: var(--acento-2);
+  overflow-wrap: anywhere;
+}
+
+/* El último en salir, resaltado */
+.ganador:first-child .ganador-nombre {
+  color: #ffffff;
+}
+
+.ganador:first-child {
+  background: rgba(229, 25, 138, 0.1);
+  margin: 0 -6px;
+  padding-inline: 6px;
+  border-radius: 6px;
+}
+
+/* Avisos */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2a2a2a;
+  border: 1px solid var(--borde);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast.error {
+  border-color: var(--error);
+}
+
+/* Cabecera: título y botón para salir */
+.cabecera-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Carga de participantes */
+.form-importar {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde);
+}
+
+.form-importar h3 {
+  font-size: 0.95rem;
+}
+
+.form-importar a,
+.entrar a {
+  color: var(--acento-2);
+}
+
+.form-importar input[type='file'] {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+.form-importar .btn {
+  justify-self: start;
+}
+
+.modo-importar {
+  display: grid;
+  gap: 4px;
+  border: none;
+  font-size: 0.9rem;
+}
+
+.modo-importar label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.modo-importar input {
+  accent-color: var(--acento);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Página para entrar al administrador */
+.pagina-entrar {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.entrar {
+  width: min(100%, 380px);
+  display: grid;
+  gap: 14px;
+}
+
+.entrar h1 {
+  font-size: 1.2rem;
+}
+
+.form-entrar {
+  display: grid;
+  gap: 8px;
+}
+
+.form-entrar input {
+  font: inherit;
+  color: var(--texto);
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #121212;
+}
+
+.form-entrar .btn {
+  margin-top: 4px;
+}
+
+.aviso-entrar {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 138, 61, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 138, 61, 0.08);
+}
+
+.error-entrar {
+  font-size: 0.9rem;
+  color: var(--error);
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.85em;
+}

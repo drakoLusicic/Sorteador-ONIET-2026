@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es" data-base="{{ request.script_root }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sorteador ONIET 30</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%B0%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <div class="fondo" aria-hidden="true"></div>
+
+  <header class="encabezado">
+    <h1 class="titulo">
+      <img src="{{ url_for('static', filename='img/logos/oniet30.png') }}"
+           alt="ONIET 30 - Olimpiadas Nacionales - Edición Especial">
+    </h1>
+
+    <!-- El premio se elige desde el administrador (/admin) -->
+    <p id="subtitulo" class="subtitulo" {% if not premio %}data-vacio{% endif %}>
+      Próximo premio:
+      <strong id="premio" class="premio">{{ premio.nombre if premio else '' }}</strong>
+    </p>
+
+    <button id="btn-sonido" class="btn-sonido" type="button" aria-pressed="true" title="Sonido activado">🔊</button>
+  </header>
+
+  <main id="escenario" class="escenario">
+    <!-- app.js calcula las medidas y las pasa como variables CSS (--s, --centro, ...) -->
+    <div id="conjunto" class="conjunto">
+      <section class="maquina" aria-label="Listado de participantes">
+        <div class="luces arriba" aria-hidden="true"></div>
+        <div class="maquina-interior">
+          <div class="maquina-cabecera">
+            <h2 class="maquina-titulo">
+              Participantes
+              <span id="contador" class="contador">0</span>
+            </h2>
+          </div>
+
+          <div id="carrete" class="carrete" tabindex="0"
+               title="Usá la rueda del mouse o arrastrá para recorrer el listado">
+            <div class="linea-premio" aria-hidden="true"></div>
+            <div class="carrete-filas"></div>
+            <p class="carrete-vacio">No quedan participantes en juego.</p>
+          </div>
+
+          <!-- Quienes ya ganaron salen del listado: acá se cuentan -->
+          <div class="maquina-pie">
+            <span id="ganadores"></span>
+          </div>
+        </div>
+        <div class="luces abajo" aria-hidden="true"></div>
+      </section>
+
+      <div id="palanca" class="palanca" aria-hidden="true">
+        <div class="palanca-soporte"></div>
+        <div class="palanca-brazo"></div>
+        <div class="palanca-eje"></div>
+        <div class="palanca-pomo"></div>
+      </div>
+
+      <div id="mascota" class="mascota">
+        <div class="mascota-sombra" aria-hidden="true"></div>
+        <div class="mascota-respira">
+          <div class="mascota-cuerpo">
+            <img data-pose="jarras" class="activa" src="{{ url_for('static', filename='img/mascota/jarras.png') }}" alt="Mascota de ONIET 30">
+            <img data-pose="alcanza" src="{{ url_for('static', filename='img/mascota/alcanza.png') }}" alt="">
+            <img data-pose="cruzado" src="{{ url_for('static', filename='img/mascota/cruzado.png') }}" alt="">
+            <img data-pose="senala" src="{{ url_for('static', filename='img/mascota/senala.png') }}" alt="">
+            <img data-pose="mira" src="{{ url_for('static', filename='img/mascota/mira.png') }}" alt="">
+            <div class="mascota-globo" aria-live="polite"></div>
+          </div>
+        </div>
+        <!-- Zona de clic sobre el cuerpo (la imagen tiene partes transparentes sobre la palanca) -->
+        <div class="mascota-toque" title="¡Hola! Soy la mascota de ONIET 30"></div>
+      </div>
+    </div>
+
+    <!-- Desenfoque vertical del listado mientras gira rápido -->
+    <svg class="filtros" aria-hidden="true" focusable="false">
+      <filter id="desenfoque-carrete" x="0" y="-20%" width="100%" height="140%">
+        <feGaussianBlur stdDeviation="0 0"/>
+      </filter>
+    </svg>
+  </main>
+
+  <footer class="pie">
+    <img class="logo-ubp" src="{{ url_for('static', filename='img/logos/ubp.png') }}" alt="Universidad Blas Pascal">
+    <!-- En computadoras flota abajo al centro; en celulares queda al lado del logo. -->
+    <div id="aviso-sonido" class="aviso-sonido" hidden>
+      <span class="con-mouse">Hacé clic en esta ventana para activar el sonido</span>
+      <span class="tactil">Tocá la pantalla para activar el sonido</span>
+    </div>
+  </footer>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-tarjeta" role="dialog" aria-modal="true" aria-labelledby="modal-nombre">
+      <div class="modal-rayos" aria-hidden="true"></div>
+      <img class="modal-mascota" src="{{ url_for('static', filename='img/mascota/jarras.png') }}" alt="">
+      <p class="modal-etiqueta">¡Tenemos ganador!</p>
+      <h2 id="modal-nombre" class="modal-nombre"></h2>
+      <p id="modal-id" class="modal-id"></p>
+      <p class="modal-premio">Premio: <strong id="modal-premio"></strong></p>
+    </div>
+  </div>
+
+  <canvas id="confeti" class="confeti" aria-hidden="true"></canvas>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/efectos.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/carrete.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/palanca.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/mascota.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

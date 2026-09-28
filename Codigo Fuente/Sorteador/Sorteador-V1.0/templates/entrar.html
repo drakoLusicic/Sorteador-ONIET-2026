@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es" data-base="{{ request.script_root }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Administrador del sorteo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body class="pagina-entrar">
+  <main class="bloque entrar">
+    <h1>Administrador del sorteo</h1>
+
+    {% if sin_clave %}
+      <p class="aviso-entrar">
+        Falta configurar la contraseña del administrador
+        (<code>SORTEADOR_CLAVE_ADMIN</code> en el archivo <code>.env</code> o en las
+        variables de entorno del hosting). Después reiniciá la aplicación.
+      </p>
+    {% else %}
+      {% if sin_https %}
+        <p class="aviso-entrar">
+          Este sitio no está usando https, así que el navegador no va a guardar la sesión.
+          Entrá con <strong>https://</strong> o, si el sitio todavía no tiene certificado,
+          configurá <code>SORTEADOR_COOKIE_SEGURA=0</code>.
+        </p>
+      {% endif %}
+      <form method="post" class="form-entrar">
+        <label class="campo" for="clave">Contraseña</label>
+        <input id="clave" name="clave" type="password" autocomplete="current-password" required autofocus>
+        {% if aviso %}<p class="error-entrar" role="alert">{{ aviso }}</p>{% endif %}
+        <button class="btn btn-principal" type="submit">Entrar</button>
+      </form>
+    {% endif %}
+
+    <p class="ayuda"><a href="{{ url_for('pantalla') }}">Ir a la pantalla del sorteador</a></p>
+  </main>
+</body>
+</html>

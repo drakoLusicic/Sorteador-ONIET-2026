@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es" data-base="{{ request.script_root }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Administrador del sorteo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%9B%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body data-pagina="admin">
+  <div class="admin">
+    <main class="principal">
+      <header class="cabecera">
+        <div class="cabecera-titulo">
+          <h1>Administrador del sorteo</h1>
+          {% if con_sesion %}
+            <form method="post" action="{{ url_for('salir') }}">
+              <button class="btn btn-chico" type="submit">Salir</button>
+            </form>
+          {% endif %}
+        </div>
+        <p id="conexion" class="conexion">Conectando…</p>
+      </header>
+
+      <section class="bloque" aria-labelledby="titulo-sorteo">
+        <h2 id="titulo-sorteo">Sorteo</h2>
+        <p id="estado-sorteo" class="estado-sorteo" aria-live="polite"></p>
+        <div class="acciones">
+          <button id="btn-sortear" class="btn btn-principal" type="button" disabled>Sortear</button>
+          <button id="btn-continuar" class="btn" type="button" disabled
+                  title="Cierra la ventana del ganador en la pantalla">Continuar</button>
+        </div>
+        <p id="motivo" class="ayuda"></p>
+      </section>
+
+      <section class="bloque" aria-labelledby="titulo-premios">
+        <h2 id="titulo-premios">Premios</h2>
+        <p class="ayuda">Marcá el premio que se sortea a continuación. Sigue marcado después de cada sorteo, así se puede entregar varias veces.</p>
+        <ul id="premios" class="premios"></ul>
+        <form id="form-premio" class="form-premio">
+          <input id="nombre-premio" type="text" maxlength="80" autocomplete="off"
+                 placeholder="Nombre del premio" aria-label="Nombre del premio nuevo" required>
+          <button class="btn" type="submit">Agregar</button>
+        </form>
+      </section>
+
+      <section class="bloque" aria-labelledby="titulo-listado">
+        <h2 id="titulo-listado">Participantes</h2>
+        <label class="campo">
+          Ordenar por
+          <select id="orden">
+            <option value="apellido">Apellido</option>
+            <option value="id">ID de participante</option>
+          </select>
+        </label>
+        <div class="fila-participantes">
+          <span id="participantes"></span>
+          <button id="btn-reiniciar" class="btn btn-chico" type="button" disabled>Reiniciar ganadores</button>
+        </div>
+
+        <!-- Carga de participantes desde una planilla (.csv o .xlsx) -->
+        <form id="form-importar" class="form-importar">
+          <h3>Cargar participantes</h3>
+          <p class="ayuda">
+            Una planilla .csv o .xlsx con las columnas <strong>nombre</strong>, <strong>apellido</strong>
+            e <strong>id</strong> (opcional: el número de participante).
+            <a href="{{ url_for('planilla_ejemplo') }}">Descargar planilla de ejemplo</a>
+          </p>
+          <input id="archivo-participantes" name="archivo" type="file" accept=".csv,.xlsx,.txt" required
+                 aria-label="Planilla de participantes">
+          <fieldset class="modo-importar">
+            <legend class="sr-only">Qué hacer con los participantes que ya están cargados</legend>
+            <label><input type="radio" name="modo" value="agregar" checked> Agregar a los que ya están (si un id ya existe, se actualiza)</label>
+            <label><input type="radio" name="modo" value="reemplazar"> Reemplazar todos (borra también la lista de ganadores)</label>
+          </fieldset>
+          <button id="btn-importar" class="btn" type="submit">Cargar</button>
+        </form>
+      </section>
+    </main>
+
+    <aside class="bloque lateral" aria-labelledby="titulo-ganadores">
+      <h2 id="titulo-ganadores">Ganadores <span id="cantidad-ganadores" class="cantidad"></span></h2>
+      <!-- El más reciente arriba; el número indica el orden en que salieron -->
+      <ol id="lista-ganadores" class="ganadores"></ol>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
