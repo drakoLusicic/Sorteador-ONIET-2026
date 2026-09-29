@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Login para sorteo con validación del DNI." />
+    <title>Sorteo Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg" aria-hidden="true">
+      <span class="blob blob-1"></span>
+      <span class="blob blob-2"></span>
+      <span class="blob blob-3"></span>
+      <span class="blob blob-4"></span>
+    </div>
+
+    <main class="shell">
+      <section class="card" aria-live="polite">
+        <div id="screen-login" class="screen active">
+          <h1>Ingresá tu DNI</h1>
+          <form id="dni-form" novalidate>
+            <label for="dni-input">DNI</label>
+            <input
+              id="dni-input"
+              name="dni"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="8"
+              aria-describedby="status-message"
+              placeholder="12345678"
+            />
+            <button id="submit-btn" type="submit">Continuar</button>
+          </form>
+        </div>
+
+        <div id="screen-confirm" class="screen" aria-live="polite">
+          <p id="nombre-parcial" class="name-display"></p>
+          <button id="confirm-btn" class="btn primary" type="button">Sí, soy yo</button>
+          <button id="cancel-btn" class="btn secondary" type="button">No soy yo</button>
+        </div>
+
+        <div id="screen-success" class="screen" aria-live="polite">
+          <p class="success-message">Ya estás participando</p>
+        </div>
+
+        <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
