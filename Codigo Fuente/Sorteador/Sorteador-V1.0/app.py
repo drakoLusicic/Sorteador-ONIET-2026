@@ -1,9 +1,10 @@
 """Sorteador ONIET 30 - servidor Flask.
 
 Sirve dos ventanas: la pantalla del sorteador (`/`), que se proyecta al
-público y no tiene controles, y el administrador (`/admin`, con contraseña),
-desde donde se sortea, se ordena el listado y se manejan los premios y los
-participantes.
+público, y el administrador (`/admin`, con contraseña), desde donde se
+sortea, se ordena el listado y se manejan los premios y los participantes.
+La pantalla no tiene controles del sorteo: solo el botón de la llave, que
+pide la contraseña y abre el administrador en otra ventana.
 
 Las ventanas consultan el estado cada segundo (`/api/estado`). El estado del
 sorteo se guarda en la base de datos y no en memoria: en el hosting
@@ -14,7 +15,6 @@ En la computadora se ejecuta con `python app.py`; en el hosting lo carga
 `passenger_wsgi.py`.
 """
 
-import hashlib
 import hmac
 import json
 import logging
@@ -59,24 +59,16 @@ log = logging.getLogger("sorteador")
 app = Flask(__name__)
 
 
-def _clave_secreta():
-    if config.CLAVE_SECRETA:
-        return config.CLAVE_SECRETA
-    if config.CLAVE_ADMIN:
-        # Derivada de la contraseña: igual en todos los procesos del hosting.
-        return hashlib.sha256(f"sorteador-oniet30|{config.CLAVE_ADMIN}".encode()).hexdigest()
-    return secrets.token_hex(32)
-
-
 app.config.update(
-    SECRET_KEY=_clave_secreta(),
+    # Sin SORTEADOR_CLAVE_SECRETA, la clave se toma de la base al prepararla
+    # (ver preparar_base); hasta entonces, una al azar.
+    SECRET_KEY=config.CLAVE_SECRETA or secrets.token_hex(32),
     SESSION_COOKIE_NAME="sorteador_sesion",
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=config.COOKIE_SEGURA,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
     MAX_CONTENT_LENGTH=5 * 1024 * 1024,  # planillas de participantes
-    LOCAL=False,  # True al ejecutarlo con `python app.py` (ver el final del archivo)
 )
 
 
@@ -101,6 +93,8 @@ def preparar_base():
         _base_ultimo_intento = time.monotonic()
         try:
             bd.init_db()
+            if not config.CLAVE_SECRETA:
+                app.secret_key = bd.clave_secreta()
             _base_lista = True
             log.info("Base de datos lista (%s).", bd.motor_nombre())
         except Exception:
@@ -152,19 +146,12 @@ def _cabeceras_seguridad(resp):
 # --------------------------------------------------------------------------- #
 # Administrador: contraseña y sesión
 # --------------------------------------------------------------------------- #
-def sin_contrasena():
-    """En la computadora, si no se configuró contraseña, el administrador queda abierto."""
-    return app.config["LOCAL"] and not config.CLAVE_ADMIN
-
-
 def es_admin():
-    return sin_contrasena() or session.get("admin") is True
+    return session.get("admin") is True
 
 
 def clave_correcta(clave):
     guardada = config.CLAVE_ADMIN
-    if not guardada:
-        return False
     if guardada.startswith(("pbkdf2:", "scrypt:")):  # hash de `python gestion.py clave`
         return check_password_hash(guardada, clave)
     return hmac.compare_digest(clave.encode(), guardada.encode())
@@ -189,6 +176,22 @@ def demasiados_fallos(ip):
 def anotar_fallo(ip):
     with _fallos_bloqueo:
         _fallos.setdefault(ip, []).append(time.monotonic())
+
+
+def intentar_entrar(clave):
+    """Si la contraseña es correcta, abre la sesión del administrador y
+    devuelve None; si no, devuelve el aviso para mostrar."""
+    ip = request.remote_addr or "?"
+    if demasiados_fallos(ip):
+        return "Demasiados intentos fallidos. Esperá unos minutos."
+    if not clave_correcta(clave):
+        anotar_fallo(ip)
+        time.sleep(1)
+        return "Contraseña incorrecta."
+    session.clear()
+    session.permanent = True
+    session["admin"] = True
+    return None
 
 
 def requiere_admin(vista):
@@ -328,30 +331,19 @@ def pantalla():
 def administrador():
     if not es_admin():
         return redirect(url_for("entrar"))
-    return render_template("admin.html", con_sesion=not sin_contrasena())
+    return render_template("admin.html")
 
 
 @app.route("/admin/entrar", methods=["GET", "POST"])
 def entrar():
     if es_admin():
         return redirect(url_for("administrador"))
-    if not config.CLAVE_ADMIN:
-        return render_template("entrar.html", sin_clave=True), 503
 
     aviso = None
     if request.method == "POST":
-        ip = request.remote_addr or "?"
-        if demasiados_fallos(ip):
-            aviso = "Demasiados intentos fallidos. Esperá unos minutos."
-        elif clave_correcta(request.form.get("clave", "")):
-            session.clear()
-            session.permanent = True
-            session["admin"] = True
+        aviso = intentar_entrar(request.form.get("clave", ""))
+        if aviso is None:
             return redirect(url_for("administrador"))
-        else:
-            anotar_fallo(ip)
-            time.sleep(1)
-            aviso = "Contraseña incorrecta."
     # Con la cookie segura, sin https el navegador no la guarda.
     sin_https = app.config["SESSION_COOKIE_SECURE"] and not request.is_secure
     return render_template("entrar.html", aviso=aviso, sin_https=sin_https)
@@ -453,6 +445,18 @@ def revelado():
         ).rowcount
     if cambio:
         olvidar_estado()
+    return jsonify(ok=True)
+
+
+@app.post("/api/entrar")
+def entrar_desde_pantalla():
+    """El botón de la llave de la pantalla: con la contraseña correcta abre la
+    sesión del administrador, y la pantalla abre su ventana."""
+    if request.headers.get("X-Sorteador") != "1":
+        return error("Pedido no permitido.", 403)
+    aviso = intentar_entrar(str((request.get_json(silent=True) or {}).get("clave") or ""))
+    if aviso:
+        return error(aviso, 401)
     return jsonify(ok=True)
 
 
@@ -642,10 +646,11 @@ def importar_participantes():
 
 
 # --------------------------------------------------------------------------- #
-# Uso en la computadora: `python app.py` abre las dos ventanas
+# Uso en la computadora: `python app.py` abre la pantalla del sorteador
+# (el administrador se abre desde su botón de la llave)
 # --------------------------------------------------------------------------- #
 def buscar_navegador():
-    """Chrome o Edge: abren cada página como una ventana propia, sin barra de
+    """Chrome o Edge: abren la página como una ventana propia, sin barra de
     direcciones, y permiten que la pantalla tenga sonido sin hacerle clic."""
     candidatos = []
     for variable in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
@@ -679,18 +684,18 @@ def esperar_servidor(segundos=20):
             time.sleep(0.2)
 
 
-def abrir_ventanas(url):
-    """Abre la pantalla del sorteador y, delante, el administrador."""
+def abrir_pantalla(url):
+    """Abre la pantalla del sorteador."""
     esperar_servidor()
-    paginas = [f"{url}/", f"{url}/admin"]
+    pagina = f"{url}/"
     navegador = buscar_navegador()
     if navegador is None:
-        for pagina in paginas:
-            webbrowser.open_new(pagina)
+        webbrowser.open_new(pagina)
         return
 
     # Un perfil propio hace que estas opciones se apliquen aunque el navegador
-    # ya esté abierto, y que recuerde dónde quedó cada ventana.
+    # ya esté abierto, y que recuerde dónde quedó la ventana. El administrador
+    # que se abre desde la llave usa el mismo perfil (y la misma sesión).
     perfil = Path(tempfile.gettempdir()) / "sorteador-oniet30"
     opciones = [
         f"--user-data-dir={perfil}",
@@ -699,26 +704,24 @@ def abrir_ventanas(url):
         "--autoplay-policy=no-user-gesture-required",
         "--disable-features=Translate",
     ]
-    for pagina in paginas:
-        subprocess.Popen(
-            [navegador, *opciones, f"--app={pagina}"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        time.sleep(1.5)  # que la primera ventana arranque el navegador antes de pedir la segunda
+    subprocess.Popen(
+        [navegador, *opciones, f"--app={pagina}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 preparar_base()
 
 if __name__ == "__main__":
     # En la computadora se usa http (sin https): la cookie de sesión no puede ser "segura".
-    app.config.update(LOCAL=True, SESSION_COOKIE_SECURE=False)
+    app.config.update(SESSION_COOKIE_SECURE=False)
     url = f"http://127.0.0.1:{PUERTO}"
     # Con debug, Flask ejecuta este archivo dos veces: el proceso que vigila
-    # los cambios del código y el servidor (WERKZEUG_RUN_MAIN). Las ventanas
-    # se abren una sola vez, desde el primero.
+    # los cambios del código y el servidor (WERKZEUG_RUN_MAIN). La pantalla
+    # se abre una sola vez, desde el primero.
     if not os.environ.get("WERKZEUG_RUN_MAIN"):
-        print(f"Pantalla del sorteador: {url}/\nAdministrador:          {url}/admin")
+        print(f"Pantalla del sorteador: {url}/\nAdministrador:          {url}/admin (o la llave de la pantalla)")
         if "--sin-ventanas" not in sys.argv:
-            threading.Thread(target=abrir_ventanas, args=(url,), daemon=True).start()
+            threading.Thread(target=abrir_pantalla, args=(url,), daemon=True).start()
     app.run(debug=True, port=PUERTO, threaded=True)

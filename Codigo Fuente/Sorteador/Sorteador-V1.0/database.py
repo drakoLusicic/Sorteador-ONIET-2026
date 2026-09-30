@@ -7,7 +7,8 @@ Tablas:
 - participantes: quienes entran en el sorteo.
 - premios: los premios que se pueden sortear.
 - ganadores: quién ganó qué y cuándo (nadie puede ganar dos veces).
-- configuracion: clave/valor (premio elegido y orden del listado).
+- configuracion: clave/valor (premio elegido, orden del listado y la clave
+  que firma la sesión del administrador).
 - sorteo: una sola fila con el estado del sorteo en curso. Está en la base
   (y no en memoria) porque en el hosting el programa corre en varios
   procesos a la vez, y todos tienen que ver el mismo estado.
@@ -16,6 +17,7 @@ Tablas:
 """
 
 import os
+import secrets
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -210,6 +212,19 @@ def guardar_config(con, clave, valor):
     ).rowcount
     if not actualizadas:
         con.execute(insert(configuracion).values(clave=clave, valor=str(valor)))
+
+
+def clave_secreta():
+    """Clave para firmar la sesión del administrador cuando no se configuró
+    SORTEADOR_CLAVE_SECRETA. Se genera al azar la primera vez y queda en la
+    base, así es la misma en todos los procesos del hosting."""
+    _insertar_si_falta(
+        configuracion,
+        {"clave": "clave_secreta", "valor": secrets.token_hex(32)},
+        configuracion.c.clave == "clave_secreta",
+    )
+    with conexion() as con:
+        return leer_config(con, "clave_secreta")
 
 
 # --------------------------------------------------------------------------- #

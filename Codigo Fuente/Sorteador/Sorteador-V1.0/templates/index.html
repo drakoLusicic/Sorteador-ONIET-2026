@@ -25,7 +25,12 @@
       <strong id="premio" class="premio">{{ premio.nombre if premio else '' }}</strong>
     </p>
 
-    <button id="btn-sonido" class="btn-sonido" type="button" aria-pressed="true" title="Sonido activado">🔊</button>
+    <div class="botones-esquina">
+      <button id="btn-sonido" class="btn-redondo" type="button" aria-pressed="true" title="Sonido activado">🔊</button>
+      <!-- Pide la contraseña y abre el administrador en otra ventana -->
+      <button id="btn-admin" class="btn-redondo" type="button" aria-haspopup="dialog"
+              title="Administrador" aria-label="Abrir el administrador">🔑</button>
+    </div>
   </header>
 
   <main id="escenario" class="escenario">
@@ -107,6 +112,22 @@
       <p class="modal-premio">Premio: <strong id="modal-premio"></strong></p>
     </div>
   </div>
+
+  <dialog id="panel-admin" class="panel-admin" aria-labelledby="panel-admin-titulo">
+    <form id="form-admin" class="panel-admin-form">
+      <h2 id="panel-admin-titulo" class="panel-admin-titulo">🔑 Administrador</h2>
+      <label class="panel-admin-campo" for="clave-admin">Contraseña</label>
+      <input id="clave-admin" type="password" autocomplete="off" required autofocus>
+      <p id="aviso-admin" class="panel-admin-aviso" role="alert"></p>
+      <!-- Solo si el navegador bloqueó la ventana nueva: con este clic sí la abre -->
+      <a id="enlace-admin" class="panel-admin-enlace" href="{{ url_for('administrador') }}"
+         target="sorteador-admin" hidden>Abrir el administrador</a>
+      <div class="panel-admin-acciones">
+        <button id="btn-cancelar-admin" class="btn-panel" type="button">Cancelar</button>
+        <button id="btn-entrar-admin" class="btn-panel btn-panel-principal" type="submit">Entrar</button>
+      </div>
+    </form>
+  </dialog>
 
   <canvas id="confeti" class="confeti" aria-hidden="true"></canvas>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

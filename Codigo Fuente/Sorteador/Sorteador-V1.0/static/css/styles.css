@@ -139,10 +139,18 @@ body {
   animation: cambio-premio 0.6s cubic-bezier(0.2, 1.6, 0.4, 1);
 }
 
-.btn-sonido {
+/* Arriba a la derecha: el sonido y, abajo, la llave del administrador. */
+.botones-esquina {
   position: absolute;
   top: 18px;
   right: 24px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-redondo {
   width: 44px;
   height: 44px;
   font-size: 1.2rem;
@@ -154,12 +162,12 @@ body {
   transition: background 0.2s, transform 0.2s;
 }
 
-.btn-sonido:hover {
+.btn-redondo:hover {
   background: rgba(255, 255, 255, 0.12);
   transform: scale(1.06);
 }
 
-.btn-sonido:focus-visible {
+.btn-redondo:focus-visible {
   outline: 3px solid var(--rosa);
   outline-offset: 3px;
 }
@@ -724,6 +732,119 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Panel de la llave: contraseña del administrador                    */
+/* ------------------------------------------------------------------ */
+.panel-admin {
+  margin: auto;
+  width: min(92vw, 380px);
+  padding: 0;
+  border: 1px solid rgba(255, 138, 61, 0.5);
+  border-radius: var(--radio);
+  color: var(--texto);
+  background: linear-gradient(160deg, #1c1419 0%, #2e0c25 100%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(229, 25, 138, 0.25);
+}
+
+.panel-admin[open] {
+  animation: fundido 0.2s ease;
+}
+
+.panel-admin::backdrop {
+  background: rgba(6, 3, 5, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.panel-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+}
+
+.panel-admin-titulo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.panel-admin-campo {
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+.panel-admin-form input {
+  width: 100%;
+  padding: 10px 14px;
+  font: inherit;
+  color: var(--texto);
+  border-radius: 10px;
+  border: 1px solid var(--panel-borde);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel-admin-form input:focus-visible {
+  outline: 2px solid var(--rosa);
+  outline-offset: 1px;
+}
+
+.panel-admin-aviso {
+  min-height: 1.3em;
+  font-size: 0.85rem;
+  color: var(--rosa);
+}
+
+.panel-admin-enlace {
+  color: var(--naranja);
+  font-weight: 600;
+}
+
+.panel-admin-enlace[hidden] {
+  display: none;
+}
+
+.panel-admin-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-panel {
+  padding: 9px 18px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--texto);
+  border-radius: 999px;
+  border: 1px solid var(--panel-borde);
+  background: var(--panel);
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.btn-panel:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-panel:focus-visible {
+  outline: 3px solid var(--rosa);
+  outline-offset: 2px;
+}
+
+.btn-panel-principal {
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--magenta), var(--naranja));
+}
+
+.btn-panel-principal:hover {
+  background: linear-gradient(90deg, var(--rosa), var(--naranja));
+}
+
+.btn-panel:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* ------------------------------------------------------------------ */
 /* Confeti y avisos                                                   */
 /* ------------------------------------------------------------------ */
 .confeti {
@@ -956,9 +1077,13 @@ body {
     padding: 3px 16px;
   }
 
-  .btn-sonido {
+  .botones-esquina {
     top: 10px;
     right: 10px;
+    gap: 8px;
+  }
+
+  .btn-redondo {
     width: 38px;
     height: 38px;
     font-size: 1rem;
@@ -1021,9 +1146,13 @@ body {
     font-size: 1rem;
   }
 
-  .btn-sonido {
+  .botones-esquina {
     top: 8px;
     right: 12px;
+    gap: 6px;
+  }
+
+  .btn-redondo {
     width: 36px;
     height: 36px;
     font-size: 0.95rem;

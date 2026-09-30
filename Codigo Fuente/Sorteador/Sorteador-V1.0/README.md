@@ -4,8 +4,8 @@ Sorteador interactivo para el evento ONIET 30. Backend en Python (Flask) con bas
 
 Tiene dos ventanas:
 
-- **Pantalla del sorteador** (`/`): la que se proyecta al público. No tiene controles y cualquiera la puede abrir (también desde el celular).
-- **Administrador** (`/admin`): desde donde se sortea y se manejan los premios y los participantes. Pide contraseña.
+- **Pantalla del sorteador** (`/`): la que se proyecta al público. No tiene controles del sorteo y cualquiera la puede abrir (también desde el celular).
+- **Administrador** (`/admin`): desde donde se sortea y se manejan los premios y los participantes. Pide contraseña. Se abre desde el botón 🔑 de la pantalla o entrando directamente a `/admin`.
 
 ## Probarlo en la computadora
 
@@ -16,11 +16,13 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Se abren las dos ventanas (http://127.0.0.1:5000 y http://127.0.0.1:5000/admin). Si está instalado Chrome o Edge, cada una se abre como aplicación (sin barra de direcciones), con un perfil propio que recuerda dónde quedó cada ventana y que deja a la pantalla reproducir sonido sin hacerle clic. Si no, se abren en el navegador predeterminado; en ese caso la pantalla pide un clic para activar el sonido.
+Se abre solo la pantalla del sorteador (http://127.0.0.1:5000). Si está instalado Chrome o Edge, se abre como aplicación (sin barra de direcciones), con un perfil propio que recuerda dónde quedó la ventana y que deja a la pantalla reproducir sonido sin hacerle clic. Si no, se abre en el navegador predeterminado; en ese caso la pantalla pide un clic para activar el sonido.
+
+Para abrir el administrador, tocar el botón 🔑 (arriba a la derecha, abajo del de sonido) e ingresar la contraseña: si es correcta, el administrador se abre en otra ventana.
 
 Para levantar solo el servidor, sin abrir ventanas: `python app.py --sin-ventanas`.
 
-Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 participantes y 5 premios de ejemplo. En la computadora el administrador no pide contraseña, salvo que se configure una en el archivo `.env` (ver [Configuración](#configuración)).
+Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 participantes y 5 premios de ejemplo. El administrador pide la contraseña predeterminada, salvo que se configure otra en el archivo `.env` (ver [Configuración](#configuración)).
 
 ## Subirlo al hosting (cPanel)
 
@@ -34,7 +36,7 @@ En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a t
    - *Application URL*: el dominio o una subcarpeta (por ejemplo `midominio.com/sorteo`; funciona igual).
    - *Application startup file*: `passenger_wsgi.py`.
    - *Application Entry point*: `application`.
-4. **Configurar.** En la carpeta de la aplicación, copiar `.env.ejemplo` como `.env` y completarlo: los datos de la base del paso 1, la contraseña del administrador y la clave secreta (ver [Configuración](#configuración)). En lugar del archivo se pueden cargar las mismas variables en la página de la aplicación, en *Environment variables*.
+4. **Configurar.** En la carpeta de la aplicación, copiar `.env.ejemplo` como `.env` y completarlo: los datos de la base del paso 1 y, si se quiere cambiar la predeterminada, la contraseña del administrador (ver [Configuración](#configuración)). En lugar del archivo se pueden cargar las mismas variables en la página de la aplicación, en *Environment variables*.
 5. **Instalar las dependencias.** En la página de la aplicación, en *Configuration files*, agregar `requirements.txt` y tocar *Run Pip Install*. (O desde la *Terminal* de cPanel: activar el entorno con el comando que muestra la página de la aplicación, arriba de todo, y ejecutar `pip install -r requirements.txt`.)
 6. **Reiniciar** la aplicación (botón *Restart*). Hay que hacerlo cada vez que se cambia el `.env` o se sube código nuevo.
 7. **Activar https.** En cPanel → *SSL/TLS Status* (AutoSSL) el dominio tiene que tener certificado, y en *Dominios* conviene activar *Force HTTPS Redirect*. El administrador solo guarda la sesión por https.
@@ -57,8 +59,8 @@ Se lee de variables de entorno o del archivo `.env` en la carpeta del programa (
 |----------|----------|
 | `SORTEADOR_DB_NOMBRE`, `SORTEADOR_DB_USUARIO`, `SORTEADOR_DB_CLAVE`, `SORTEADOR_DB_HOST`, `SORTEADOR_DB_PUERTO` | Datos de la base MySQL/MariaDB. La contraseña puede tener cualquier símbolo. |
 | `SORTEADOR_DB_URL` | En lugar de lo anterior, la URL completa de la base. |
-| `SORTEADOR_CLAVE_ADMIN` | Contraseña del administrador. **Obligatoria en el hosting**: sin ella el administrador no se abre. Puede ser el texto de la contraseña o, mejor, el hash que genera `python gestion.py clave`. |
-| `SORTEADOR_CLAVE_SECRETA` | Texto largo al azar para firmar la sesión del administrador (`python -c "import secrets; print(secrets.token_hex(32))"`). Si falta, se deriva de la contraseña. |
+| `SORTEADOR_CLAVE_ADMIN` | Contraseña del administrador (la piden la llave de la pantalla y `/admin`). Si falta, vale la predeterminada, guardada como hash en `config.py`. Puede ser el texto de la contraseña o, mejor, el hash que genera `python gestion.py clave`. |
+| `SORTEADOR_CLAVE_SECRETA` | Texto largo al azar para firmar la sesión del administrador (`python -c "import secrets; print(secrets.token_hex(32))"`). Si falta, se genera una al azar y se guarda en la base (tabla `configuracion`). |
 | `SORTEADOR_COOKIE_SEGURA` | `1` (por defecto): la sesión solo viaja por https. Poner `0` solo si el sitio todavía no tiene certificado. |
 | `SORTEADOR_ZONA_HORARIA` | Para la hora de cada ganador. Por defecto `America/Argentina/Cordoba`. |
 
@@ -66,9 +68,9 @@ Sin `SORTEADOR_DB_NOMBRE` ni `SORTEADOR_DB_URL`, usa SQLite (`sorteador.db`) con
 
 ### Seguridad
 
-- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, participantes, lista de ganadores) necesita la sesión del administrador.
+- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, participantes, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con la contraseña correcta.
 - Los pedidos que cambian algo además llevan una cabecera propia (`X-Sorteador`), que una página de otro sitio no puede agregar: así no puede aprovechar una sesión abierta.
-- Después de 5 contraseñas incorrectas seguidas desde una misma dirección, hay que esperar unos minutos.
+- Después de 5 contraseñas incorrectas seguidas desde una misma dirección (en la llave o en `/admin`), hay que esperar unos minutos.
 - La sesión dura 12 horas; el botón *Salir* la cierra.
 
 ## Participantes
@@ -105,6 +107,7 @@ Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlac
 - **No se puede ganar dos veces**: cuando el administrador toca Continuar, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron). Abajo del listado se cuenta cuántos ya ganaron.
 - En cada sorteo el listado da al menos 3 vueltas completas, por más participantes que haya. Con cientos, el tramo rápido se ve borroso, como un tambor girando.
 - 🔊 (arriba a la derecha) activa o desactiva el sonido.
+- 🔑 (abajo del sonido) pide la contraseña y, si es correcta, abre el administrador en otra ventana. Si el navegador bloquea la ventana nueva, en el mismo panel aparece un enlace para abrirla.
 - **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con la palanca y la mascota a su derecha, y el logo de la Universidad abajo. Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 64% (`PARTE_MAQUINA`) y la mascota y la palanca se achican juntas, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
 
 ## Mascota y palanca
@@ -188,7 +191,7 @@ Todo esto pasa en transacciones de la base: si dos pedidos de sortear llegan jun
 | `participantes` | `id`, `nombre`, `apellido`                                            |
 | `premios`       | `id`, `nombre`                                                        |
 | `ganadores`     | `participante_id`, `premio` (nombre), `premio_id`, `fecha`            |
-| `configuracion` | clave/valor: `orden` del listado y `premio_id` elegido como próximo   |
+| `configuracion` | clave/valor: `orden` del listado, `premio_id` elegido como próximo y `clave_secreta` de la sesión |
 | `sorteo`        | Una fila: estado del sorteo, número, último ganador y versiones       |
 | `pantallas`     | Pantallas abiertas y cuándo avisaron por última vez                   |
 
@@ -214,6 +217,7 @@ Las marcadas con 🔒 necesitan la sesión del administrador (y, si cambian algo
 | POST   | `/api/adios?cliente=…`                  | La pantalla avisa que se cierra                              |
 | GET    | `/api/participantes?orden=apellido\|id` | Lista de participantes, con estado de ganador                |
 | POST   | `/api/revelado`                         | La pantalla avisa que ya muestra al ganador (`{"numero": 7}`) |
+| POST   | `/api/entrar`                           | La llave de la pantalla: abre la sesión del administrador (`{"clave": "..."}`) |
 | PUT    | `/api/orden` 🔒                          | Cambia el orden del listado (`{"orden": "id"}`)              |
 | GET    | `/api/premios` 🔒                        | Premios, con cuántas veces se entregó cada uno               |
 | POST   | `/api/premios` 🔒                        | Agrega un premio (`{"nombre": "..."}`)                       |

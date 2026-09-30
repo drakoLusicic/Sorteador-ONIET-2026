@@ -1,7 +1,8 @@
 /**
  * Pantalla del sorteador (la que se proyecta al público). No tiene
  * controles: el sorteo, el premio y el orden del listado se manejan desde el
- * administrador (/admin). La pantalla escucha los avisos del servidor y anima
+ * administrador (/admin), que se abre con el botón de la llave y la
+ * contraseña. La pantalla escucha los avisos del servidor y anima
  * lo que corresponde: la mascota tira de la palanca, el listado gira como un
  * tragamonedas y aparece la ventana del ganador hasta que el administrador
  * toca Continuar.
@@ -22,6 +23,14 @@
     premio: $('#premio'),
     btnSonido: $('#btn-sonido'),
     avisoSonido: $('#aviso-sonido'),
+    btnAdmin: $('#btn-admin'),
+    panelAdmin: $('#panel-admin'),
+    formAdmin: $('#form-admin'),
+    claveAdmin: $('#clave-admin'),
+    avisoAdmin: $('#aviso-admin'),
+    enlaceAdmin: $('#enlace-admin'),
+    btnEntrarAdmin: $('#btn-entrar-admin'),
+    btnCancelarAdmin: $('#btn-cancelar-admin'),
     modal: $('#modal'),
     modalNombre: $('#modal-nombre'),
     modalId: $('#modal-id'),
@@ -335,7 +344,8 @@
   // para que el administrador se entere). Solo funciona en el navegador donde
   // el administrador inició sesión; en el resto (el público) no hace nada.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !el.modal.hidden) {
+    // Con el panel de la llave abierto, Escape solo cierra el panel.
+    if (e.key === 'Escape' && !el.modal.hidden && !el.panelAdmin.open) {
       api('/api/continuar', { method: 'POST' }).catch((err) => {
         if (err.status !== 401 && err.status !== 403) mostrarToast(err.message, true);
       });
@@ -372,6 +382,53 @@
     document.addEventListener(tipo, () => window.Sonido.activar(), true);
   }
   setTimeout(actualizarAvisoSonido, 1000);
+
+  // ------------------------------------------------------------------ //
+  // Administrador: la llave pide la contraseña y abre su ventana
+  // ------------------------------------------------------------------ //
+  /** Abre (o trae adelante) la ventana del administrador. Devuelve null si el navegador la bloqueó. */
+  function abrirVentanaAdmin() {
+    const ancho = Math.min(1200, screen.availWidth);
+    const alto = Math.min(860, screen.availHeight);
+    return window.open(window.rutaApi('/admin'), 'sorteador-admin', `popup,width=${ancho},height=${alto}`);
+  }
+
+  function limpiarPanelAdmin() {
+    el.claveAdmin.value = '';
+    el.avisoAdmin.textContent = '';
+    el.enlaceAdmin.hidden = true;
+  }
+
+  el.btnAdmin.addEventListener('click', () => {
+    limpiarPanelAdmin();
+    el.panelAdmin.showModal();
+  });
+  el.btnCancelarAdmin.addEventListener('click', () => el.panelAdmin.close());
+  el.panelAdmin.addEventListener('close', limpiarPanelAdmin);
+  el.enlaceAdmin.addEventListener('click', () => el.panelAdmin.close());
+
+  el.formAdmin.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    el.avisoAdmin.textContent = '';
+    el.btnEntrarAdmin.disabled = true;
+    try {
+      await api('/api/entrar', { method: 'POST', body: JSON.stringify({ clave: el.claveAdmin.value }) });
+      el.claveAdmin.value = '';
+      if (abrirVentanaAdmin()) {
+        el.panelAdmin.close();
+      } else {
+        // La sesión ya quedó abierta: el enlace la abre con un clic nuevo.
+        el.avisoAdmin.textContent = 'El navegador no dejó abrir la ventana.';
+        el.enlaceAdmin.hidden = false;
+        el.enlaceAdmin.focus();
+      }
+    } catch (err) {
+      el.avisoAdmin.textContent = err.message;
+      el.claveAdmin.select();
+    } finally {
+      el.btnEntrarAdmin.disabled = false;
+    }
+  });
 
   // ------------------------------------------------------------------ //
   // Conexión con el servidor

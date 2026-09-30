@@ -65,13 +65,17 @@ URL_BASE_DE_DATOS = _url_base_de_datos()
 # participantes y premios de ejemplo.
 DEMO = not (_variable("SORTEADOR_DB_URL") or _variable("SORTEADOR_DB_NOMBRE"))
 
-# Contraseña del administrador (/admin). Puede ser el texto de la contraseña o
-# un hash generado con `python gestion.py clave`. En el hosting es obligatoria:
-# sin ella el administrador no se puede abrir.
-CLAVE_ADMIN = os.environ.get("SORTEADOR_CLAVE_ADMIN", "")
+# Contraseña del administrador (la pide la llave de la pantalla y /admin).
+# Puede ser el texto de la contraseña o un hash generado con
+# `python gestion.py clave`. Si no se configura, vale la predeterminada, que
+# acá está guardada como hash para no dejarla escrita en el código.
+CLAVE_ADMIN_PREDETERMINADA = (
+    "pbkdf2:sha256:1000000$g59PQp9Mr0uWKlOY$8bb9671330c7d9061f6dad0e4124a6e2c22e87b61206a24a4eb7ca4e4377de69"
+)
+CLAVE_ADMIN = os.environ.get("SORTEADOR_CLAVE_ADMIN") or CLAVE_ADMIN_PREDETERMINADA
 
-# Clave para firmar la sesión del administrador. Si no se define, se deriva de
-# la contraseña del administrador.
+# Clave para firmar la sesión del administrador. Si no se define, se genera una
+# al azar y se guarda en la base de datos (tabla configuracion).
 CLAVE_SECRETA = _variable("SORTEADOR_CLAVE_SECRETA")
 
 # La cookie de sesión solo viaja por https. Poner 0 únicamente si el sitio

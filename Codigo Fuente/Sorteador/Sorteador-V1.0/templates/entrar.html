@@ -12,27 +12,19 @@
   <main class="bloque entrar">
     <h1>Administrador del sorteo</h1>
 
-    {% if sin_clave %}
+    {% if sin_https %}
       <p class="aviso-entrar">
-        Falta configurar la contraseña del administrador
-        (<code>SORTEADOR_CLAVE_ADMIN</code> en el archivo <code>.env</code> o en las
-        variables de entorno del hosting). Después reiniciá la aplicación.
+        Este sitio no está usando https, así que el navegador no va a guardar la sesión.
+        Entrá con <strong>https://</strong> o, si el sitio todavía no tiene certificado,
+        configurá <code>SORTEADOR_COOKIE_SEGURA=0</code>.
       </p>
-    {% else %}
-      {% if sin_https %}
-        <p class="aviso-entrar">
-          Este sitio no está usando https, así que el navegador no va a guardar la sesión.
-          Entrá con <strong>https://</strong> o, si el sitio todavía no tiene certificado,
-          configurá <code>SORTEADOR_COOKIE_SEGURA=0</code>.
-        </p>
-      {% endif %}
-      <form method="post" class="form-entrar">
-        <label class="campo" for="clave">Contraseña</label>
-        <input id="clave" name="clave" type="password" autocomplete="current-password" required autofocus>
-        {% if aviso %}<p class="error-entrar" role="alert">{{ aviso }}</p>{% endif %}
-        <button class="btn btn-principal" type="submit">Entrar</button>
-      </form>
     {% endif %}
+    <form method="post" class="form-entrar">
+      <label class="campo" for="clave">Contraseña</label>
+      <input id="clave" name="clave" type="password" autocomplete="current-password" required autofocus>
+      {% if aviso %}<p class="error-entrar" role="alert">{{ aviso }}</p>{% endif %}
+      <button class="btn btn-principal" type="submit">Entrar</button>
+    </form>
 
     <p class="ayuda"><a href="{{ url_for('pantalla') }}">Ir a la pantalla del sorteador</a></p>
   </main>

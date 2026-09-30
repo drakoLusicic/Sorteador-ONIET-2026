@@ -14,11 +14,9 @@
       <header class="cabecera">
         <div class="cabecera-titulo">
           <h1>Administrador del sorteo</h1>
-          {% if con_sesion %}
-            <form method="post" action="{{ url_for('salir') }}">
-              <button class="btn btn-chico" type="submit">Salir</button>
-            </form>
-          {% endif %}
+          <form method="post" action="{{ url_for('salir') }}">
+            <button class="btn btn-chico" type="submit">Salir</button>
+          </form>
         </div>
         <p id="conexion" class="conexion">Conectando…</p>
       </header>
