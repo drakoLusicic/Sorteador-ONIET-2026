@@ -1,6 +1,6 @@
 # Sorteo Login
 
-Aplicación de login para sorteo. Usa PostgreSQL cuando se configura `DATABASE_URL` y conserva el CSV como alternativa local de desarrollo.
+Aplicación de login para sorteo. Usa MySQL cuando se configuran las variables `DB_*` y conserva el CSV como alternativa local de desarrollo.
 
 ## Requisitos
 
@@ -27,7 +27,7 @@ npm run dev
 
 La app queda disponible en http://localhost:3000.
 
-Sin `DATABASE_URL`, el servidor usa el CSV local. Si `DATABASE_URL` está configurada, usa PostgreSQL y no lee el CSV.
+Sin `DB_HOST`, `DB_USER` y `DB_PASSWORD`, el servidor usa el CSV local. Cuando se configuran, conecta a MySQL y no lee el CSV.
 
 ## Configurar el puerto
 
@@ -37,27 +37,23 @@ Puedes definir un puerto distinto con un archivo `.env`:
 PORT=3000
 ```
 
-## PostgreSQL para hosting
+## MySQL en cPanel
 
-1. Crea una base PostgreSQL administrada en tu proveedor de hosting y configura `DATABASE_URL` como variable secreta del servicio. No la guardes en Git.
-2. Ejecuta una vez, contra esa base, el setup y la importación:
+1. En cPanel, confirma la base `sorteador_db` y asigna un usuario MySQL con permisos sobre ella. Configura estas variables en el entorno del servidor:
 
-```bash
-npm run db:setup
-npm run db:import-csv
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=sorteador_db
+DB_USER=usuario_cpanel
+DB_PASSWORD=clave
 ```
 
-El importador lee `data/participantes.csv` por defecto. También puedes pasar otra ruta como argumento:
+Usa el nombre completo asignado por cPanel (a menudo lleva prefijo) y no guardes las credenciales en Git. La tabla `estudiante` debe existir previamente con los campos `id`, `legajo`, `dni`, `nombre`, `apellido`, `email`, `inscripto` y `fecha_inscripcion`. El backend valida por `dni` y `inscripto`, y al confirmar solo actualiza `inscripto` de `0` a `1`. No crea tablas ni agrega o elimina filas. Concede al usuario MySQL permiso `SELECT` y permiso `UPDATE` únicamente sobre `inscripto`.
 
-```bash
-npm run db:import-csv -- "C:/ruta-privada/participantes.csv"
-```
+2. Instala dependencias, configura `NODE_ENV=production` en el hosting y usa `npm start` como comando de inicio. El servidor prueba la conexión antes de aceptar requests. Si el proveedor requiere TLS, configura `DB_SSL=true` y, si corresponde, `DB_SSL_CA_FILE` con la ruta segura del certificado.
 
-La importación agrega participantes nuevos y no modifica filas que ya existan, incluida su bandera. Las columnas del CSV aparte de `dni`, `nombre`, `apellido` y `bandera` quedan preservadas en `datos_adicionales` como JSONB. El esquema está en `db/schema.sql`.
-
-3. Configura `NODE_ENV=production` en el hosting y usa `npm start` como comando de inicio. El servidor prueba la conexión antes de aceptar requests y usa TLS con validación de certificado. Si el proveedor requiere una CA propia, configura `PGSSL_CA_FILE` con la ruta segura del certificado.
-
-El proceso de ejecución necesita permisos de lectura y actualización sobre `participantes`; reserva permisos de creación/modificación del esquema para el paso de setup cuando el proveedor permita separar roles.
+El proceso no necesita permisos para crear o modificar el esquema ni para insertar o eliminar registros.
 
 Si la aplicación está detrás de un proxy, configura `TRUST_PROXY_HOPS` con el número exacto de saltos confiables que indique tu proveedor. No lo configures a ciegas: el rate limit depende de la IP que Express recibe.
 
@@ -65,7 +61,7 @@ El rate limit actual usa memoria local del proceso. Para múltiples instancias d
 
 ## CSV local
 
-Para producción con PostgreSQL, no reemplaces el CSV de ejemplo por datos reales. Si excepcionalmente se usa CSV local en producción, configura el archivo fuera del proyecto, del directorio público y de carpetas sincronizadas:
+Para producción con MySQL, no reemplaces el CSV de ejemplo por datos reales. Si excepcionalmente se usa CSV local en producción, configura el archivo fuera del proyecto, del directorio público y de carpetas sincronizadas:
 
 ```env
 CSV_PATH=C:/ruta-privada/participantes.csv
@@ -88,7 +84,7 @@ Debe tener encabezado con al menos `dni,nombre,apellido,bandera`.
 ## Flujo de uso
 
 1. El usuario ingresa su DNI.
-2. El backend lo busca en PostgreSQL o en el CSV local.
+2. El backend lo busca en MySQL o en el CSV local.
 3. Si existe y todavía no participó, muestra un nombre parcial para confirmar.
 4. Al confirmar, se guarda `bandera=1` en el CSV y la persona pasa a participar.
 
@@ -99,7 +95,7 @@ Debe tener encabezado con al menos `dni,nombre,apellido,bandera`.
 - Helmet habilitado con Content Security Policy y headers de seguridad.
 - Las respuestas de la API no se cachean y no incluyen filas completas ni consultas.
 - Solo se sirve `public/`; el servidor rechaza configurar el CSV dentro de esa carpeta.
-- PostgreSQL recibe solo consultas parametrizadas; el DNI se pasa como parámetro y no se concatena a SQL. La API no devuelve filas ni sentencias.
+- MySQL recibe solo consultas parametrizadas; el DNI se pasa como parámetro y no se concatena a SQL. La API no devuelve filas ni sentencias.
 - En producción, usa HTTPS para cifrar el DNI durante el transporte. Configura el proxy del proveedor para que la aplicación no quede expuesta por un puerto público sin TLS.
 - En modo CSV, el archivo no está cifrado en disco. En sistemas POSIX el servidor limita sus permisos a `0600`; en Windows configura ACL restrictivas.
 - No guardes datos reales en una carpeta pública, repositorio Git o carpeta sincronizada en la nube sin autorización y controles de acceso adecuados. La ubicación predeterminada es solo para desarrollo.

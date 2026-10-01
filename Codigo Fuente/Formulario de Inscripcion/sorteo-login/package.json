@@ -1,13 +1,11 @@
 {
   "name": "sorteo-login",
   "version": "1.0.0",
-  "description": "Login para sorteo con almacenamiento PostgreSQL o CSV local.",
+  "description": "Login para sorteo con almacenamiento MySQL o CSV local.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "db:setup": "node scripts/setup-db.js",
-    "db:import-csv": "node scripts/import-csv.js"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "csv-parse": "^5.5.3",
@@ -16,7 +14,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.1",
     "helmet": "^7.1.0",
-    "pg": "^8.13.1"
+    "mysql2": "^3.14.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"

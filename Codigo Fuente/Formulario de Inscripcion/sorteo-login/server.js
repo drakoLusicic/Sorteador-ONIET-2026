@@ -25,8 +25,8 @@ const projectRoot = __dirname;
 const publicDir = path.join(projectRoot, 'public');
 const dataDir = path.join(projectRoot, 'data');
 const csvPath = path.resolve(process.env.CSV_PATH || path.join(dataDir, 'participantes.csv'));
-const databaseUrl = process.env.DATABASE_URL;
-const pool = databaseUrl ? createPool() : null;
+const useDatabase = Boolean(process.env.DB_HOST || process.env.DB_USER || process.env.DB_PASSWORD);
+const pool = useDatabase ? createPool() : null;
 let writeQueue = Promise.resolve();
 
 const exampleRows = [
@@ -142,11 +142,11 @@ async function ensureCsvFile() {
 
 async function findParticipant(dni) {
   if (pool) {
-    const result = await pool.query(
-      'SELECT dni, nombre, apellido, bandera FROM participantes WHERE dni = $1',
+    const [rows] = await pool.execute(
+      'SELECT dni, nombre, apellido, inscripto AS bandera FROM estudiante WHERE dni = ? LIMIT 1',
       [dni]
     );
-    return result.rows[0] || null;
+    return rows[0] || null;
   }
 
   const rows = await readCsvRows();
@@ -155,21 +155,21 @@ async function findParticipant(dni) {
 
 async function confirmParticipant(dni) {
   if (pool) {
-    const updated = await pool.query(
-      'UPDATE participantes SET bandera = 1 WHERE dni = $1 AND bandera = 0 RETURNING dni',
+    const [updated] = await pool.execute(
+      'UPDATE estudiante SET inscripto = 1 WHERE dni = ? AND inscripto = 0',
       [dni]
     );
 
-    if (updated.rowCount > 0) {
+    if (updated.affectedRows > 0) {
       return { status: 200, body: { estado: 'confirmado' } };
     }
 
-    const existing = await pool.query(
-      'SELECT dni FROM participantes WHERE dni = $1',
+    const [existing] = await pool.execute(
+      'SELECT dni FROM estudiante WHERE dni = ? LIMIT 1',
       [dni]
     );
 
-    return existing.rowCount === 0
+    return existing.length === 0
       ? { status: 404, body: { error: 'DNI no encontrado' } }
       : { status: 409, body: { error: 'Ya estás participando' } };
   }
@@ -303,7 +303,7 @@ async function boot() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Servidor corriendo en el puerto ${PORT} (${pool ? 'PostgreSQL' : 'CSV local'})`);
+    console.log(`Servidor corriendo en el puerto ${PORT} (${pool ? 'MySQL' : 'CSV local'})`);
   });
 }
 

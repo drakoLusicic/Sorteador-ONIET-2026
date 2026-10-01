@@ -1,32 +1,30 @@
 const fs = require('fs');
-const { Pool } = require('pg');
+const mysql = require('mysql2/promise');
 
 function createPool() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL no está configurada');
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+    throw new Error('DB_HOST, DB_USER y DB_PASSWORD deben estar configuradas');
   }
 
-  const connectionUrl = new URL(process.env.DATABASE_URL);
-  const sslMode = connectionUrl.searchParams.get('sslmode');
-  ['sslmode', 'sslcert', 'sslkey', 'sslrootcert'].forEach((parameter) => {
-    connectionUrl.searchParams.delete(parameter);
-  });
-
-  const useTls = process.env.NODE_ENV === 'production' || Boolean(sslMode && sslMode !== 'disable');
-  const ssl = useTls
+  const ssl = process.env.DB_SSL === 'true'
     ? {
         rejectUnauthorized: true,
-        ...(process.env.PGSSL_CA_FILE
-          ? { ca: fs.readFileSync(process.env.PGSSL_CA_FILE, 'utf8') }
+        ...(process.env.DB_SSL_CA_FILE
+          ? { ca: fs.readFileSync(process.env.DB_SSL_CA_FILE, 'utf8') }
           : {})
       }
     : undefined;
 
-  return new Pool({
-    connectionString: connectionUrl.toString(),
-    max: 10,
-    connectionTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
+  return mysql.createPool({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'sorteador_db',
+    connectionLimit: 10,
+    connectTimeout: 5000,
+    waitForConnections: true,
+    queueLimit: 0,
     ssl
   });
 }
