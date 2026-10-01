@@ -116,8 +116,11 @@
   <dialog id="panel-admin" class="panel-admin" aria-labelledby="panel-admin-titulo">
     <form id="form-admin" class="panel-admin-form">
       <h2 id="panel-admin-titulo" class="panel-admin-titulo">🔑 Administrador</h2>
+      <label class="panel-admin-campo" for="usuario-admin">Usuario</label>
+      <input id="usuario-admin" type="text" maxlength="50" autocomplete="off" autocapitalize="off"
+             spellcheck="false" required autofocus>
       <label class="panel-admin-campo" for="clave-admin">Contraseña</label>
-      <input id="clave-admin" type="password" autocomplete="off" required autofocus>
+      <input id="clave-admin" type="password" autocomplete="off" required>
       <p id="aviso-admin" class="panel-admin-aviso" role="alert"></p>
       <!-- Solo si el navegador bloqueó la ventana nueva: con este clic sí la abre -->
       <a id="enlace-admin" class="panel-admin-enlace" href="{{ url_for('administrador') }}"

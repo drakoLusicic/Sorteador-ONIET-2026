@@ -10,6 +10,8 @@ en phpMyAdmin; en la computadora, las crea el sorteador):
 - premios: cada premio se sortea una sola vez.
 - ganadores: quién ganó qué y cuándo. Nadie puede ganar dos veces y ningún
   premio se entrega dos veces.
+- administradores: usuarios que entran al administrador, con el hash de su
+  contraseña (en el hosting se crea con administradores.sql).
 
 Tablas propias del sorteador (las crea solo, también en el hosting):
 - configuracion: clave/valor (premio elegido, orden del listado y la clave
@@ -111,6 +113,21 @@ ganadores = Table(
     **_MYSQL_EVENTO,
 )
 
+administradores = Table(
+    "administradores",
+    metadata,
+    Column("id", _ID, primary_key=True, autoincrement=True),
+    # utf8mb4_bin: el usuario distingue mayúsculas y minúsculas, igual que en SQLite.
+    Column(
+        "usuario",
+        String(50).with_variant(mysql.VARCHAR(50, charset="utf8mb4", collation="utf8mb4_bin"), "mysql", "mariadb"),
+        nullable=False,
+    ),
+    Column("clave_hash", String(255), nullable=False),  # nunca la contraseña: solo su hash
+    UniqueConstraint("usuario", name="uq_administradores_usuario"),
+    **_MYSQL_EVENTO,
+)
+
 # Quienes participan del sorteo: los estudiantes inscriptos.
 INSCRIPTO = estudiantes.c.inscripto == 1
 # Inscriptos que todavía no ganaron: entre ellos se sortea.
@@ -169,6 +186,13 @@ ESTUDIANTES_DEMO = [
 ]
 
 PREMIOS_DEMO = ["Notebook", "Tablet", "Auriculares inalámbricos", "Parlante Bluetooth", "Mochila ONIET 30"]
+
+# El mismo administrador que carga administradores.sql en el hosting (de la
+# contraseña, solo el hash).
+ADMIN_DEMO = {
+    "usuario": "ONIET3030",
+    "clave_hash": "pbkdf2:sha256:1000000$pACkAwTjPZrgBQ6H$e38e45968dbeb9eac76b219d0fe8218b6bb212b4fb4afad19e6dc04159bda36b",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -263,6 +287,22 @@ def clave_secreta():
 
 
 # --------------------------------------------------------------------------- #
+# Administradores
+# --------------------------------------------------------------------------- #
+def buscar_admin(con, usuario):
+    return con.execute(select(administradores).where(administradores.c.usuario == usuario)).mappings().first()
+
+
+def guardar_admin(con, usuario, clave_hash):
+    """Crea el administrador o, si ya existe, le cambia la contraseña."""
+    actualizados = con.execute(
+        update(administradores).where(administradores.c.usuario == usuario).values(clave_hash=clave_hash)
+    ).rowcount
+    if not actualizados:
+        con.execute(insert(administradores).values(usuario=usuario, clave_hash=clave_hash))
+
+
+# --------------------------------------------------------------------------- #
 # Creación de las tablas
 # --------------------------------------------------------------------------- #
 def init_db():
@@ -303,9 +343,9 @@ def _revisar_tablas():
 
 
 def cargar_demo():
-    """Carga estudiantes y premios de ejemplo en las tablas que estén vacías.
-    Devuelve cuántos de cada uno cargó."""
-    cargados = {"estudiantes": 0, "premios": 0}
+    """Carga estudiantes, premios y el administrador de ejemplo en las tablas
+    que estén vacías. Devuelve cuántos de cada uno cargó."""
+    cargados = {"estudiantes": 0, "premios": 0, "administradores": 0}
     with transaccion() as con:
         if con.execute(select(func.count()).select_from(estudiantes)).scalar_one() == 0:
             ahora = ahora_local()
@@ -325,6 +365,9 @@ def cargar_demo():
         if con.execute(select(func.count()).select_from(premios)).scalar_one() == 0:
             con.execute(insert(premios), [{"nombre": p} for p in PREMIOS_DEMO])
             cargados["premios"] = len(PREMIOS_DEMO)
+        if con.execute(select(func.count()).select_from(administradores)).scalar_one() == 0:
+            con.execute(insert(administradores).values(**ADMIN_DEMO))
+            cargados["administradores"] = 1
     return cargados
 
 

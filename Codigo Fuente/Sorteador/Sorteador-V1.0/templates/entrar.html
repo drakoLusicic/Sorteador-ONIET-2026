@@ -20,8 +20,13 @@
       </p>
     {% endif %}
     <form method="post" class="form-entrar">
+      <label class="campo" for="usuario">Usuario</label>
+      <input id="usuario" name="usuario" type="text" value="{{ usuario }}" maxlength="50"
+             autocomplete="username" autocapitalize="off" spellcheck="false" required
+             {% if not usuario %}autofocus{% endif %}>
       <label class="campo" for="clave">Contraseña</label>
-      <input id="clave" name="clave" type="password" autocomplete="current-password" required autofocus>
+      <input id="clave" name="clave" type="password" autocomplete="current-password" required
+             {% if usuario %}autofocus{% endif %}>
       {% if aviso %}<p class="error-entrar" role="alert">{{ aviso }}</p>{% endif %}
       <button class="btn btn-principal" type="submit">Entrar</button>
     </form>

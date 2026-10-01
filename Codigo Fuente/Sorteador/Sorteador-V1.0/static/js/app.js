@@ -1,8 +1,8 @@
 /**
  * Pantalla del sorteador (la que se proyecta al público). No tiene
  * controles: el sorteo, el premio y el orden del listado se manejan desde el
- * administrador (/admin), que se abre con el botón de la llave y la
- * contraseña. La pantalla escucha los avisos del servidor y anima
+ * administrador (/admin), que se abre con el botón de la llave, el usuario
+ * y la contraseña. La pantalla escucha los avisos del servidor y anima
  * lo que corresponde: la mascota tira de la palanca, el listado gira como un
  * tragamonedas y aparece la ventana del ganador hasta que el administrador
  * toca Continuar.
@@ -26,6 +26,7 @@
     btnAdmin: $('#btn-admin'),
     panelAdmin: $('#panel-admin'),
     formAdmin: $('#form-admin'),
+    usuarioAdmin: $('#usuario-admin'),
     claveAdmin: $('#clave-admin'),
     avisoAdmin: $('#aviso-admin'),
     enlaceAdmin: $('#enlace-admin'),
@@ -384,7 +385,7 @@
   setTimeout(actualizarAvisoSonido, 1000);
 
   // ------------------------------------------------------------------ //
-  // Administrador: la llave pide la contraseña y abre su ventana
+  // Administrador: la llave pide usuario y contraseña y abre su ventana
   // ------------------------------------------------------------------ //
   /** Abre (o trae adelante) la ventana del administrador. Devuelve null si el navegador la bloqueó. */
   function abrirVentanaAdmin() {
@@ -394,6 +395,7 @@
   }
 
   function limpiarPanelAdmin() {
+    el.usuarioAdmin.value = '';
     el.claveAdmin.value = '';
     el.avisoAdmin.textContent = '';
     el.enlaceAdmin.hidden = true;
@@ -412,7 +414,11 @@
     el.avisoAdmin.textContent = '';
     el.btnEntrarAdmin.disabled = true;
     try {
-      await api('/api/entrar', { method: 'POST', body: JSON.stringify({ clave: el.claveAdmin.value }) });
+      await api('/api/entrar', {
+        method: 'POST',
+        body: JSON.stringify({ usuario: el.usuarioAdmin.value, clave: el.claveAdmin.value }),
+      });
+      el.usuarioAdmin.value = '';
       el.claveAdmin.value = '';
       if (abrirVentanaAdmin()) {
         el.panelAdmin.close();

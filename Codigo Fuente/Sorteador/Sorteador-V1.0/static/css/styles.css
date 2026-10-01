@@ -787,6 +787,10 @@ body {
   outline-offset: 1px;
 }
 
+.panel-admin-form input + .panel-admin-campo {
+  margin-top: 4px;
+}
+
 .panel-admin-aviso {
   min-height: 1.3em;
   font-size: 0.85rem;

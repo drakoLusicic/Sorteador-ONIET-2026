@@ -5,7 +5,7 @@ Sorteador interactivo para el evento ONIET 30. Backend en Python (Flask) con bas
 Tiene dos ventanas:
 
 - **Pantalla del sorteador** (`/`): la que se proyecta al público. No tiene controles del sorteo y cualquiera la puede abrir (también desde el celular).
-- **Administrador** (`/admin`): desde donde se sortea y se manejan los premios y los participantes. Pide contraseña. Se abre desde el botón 🔑 de la pantalla o entrando directamente a `/admin`.
+- **Administrador** (`/admin`): desde donde se sortea y se manejan los premios y los participantes. Pide usuario y contraseña, que están en la base (tabla `administradores`). Se abre desde el botón 🔑 de la pantalla o entrando directamente a `/admin`.
 
 ## Probarlo en la computadora
 
@@ -18,17 +18,17 @@ python app.py
 
 Se abre solo la pantalla del sorteador (http://127.0.0.1:5000). Si está instalado Chrome o Edge, se abre como aplicación (sin barra de direcciones), con un perfil propio que recuerda dónde quedó la ventana y que deja a la pantalla reproducir sonido sin hacerle clic. Si no, se abre en el navegador predeterminado; en ese caso la pantalla pide un clic para activar el sonido.
 
-Para abrir el administrador, tocar el botón 🔑 (arriba a la derecha, abajo del de sonido) e ingresar la contraseña: si es correcta, el administrador se abre en otra ventana.
+Para abrir el administrador, tocar el botón 🔑 (arriba a la derecha, abajo del de sonido) e ingresar el usuario y la contraseña: si son correctos, el administrador se abre en otra ventana.
 
 Para levantar solo el servidor, sin abrir ventanas: `python app.py --sin-ventanas`.
 
-Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 estudiantes de ejemplo (32 inscriptos) y 5 premios. El administrador pide la contraseña predeterminada, salvo que se configure otra en el archivo `.env` (ver [Configuración](#configuración)).
+Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 estudiantes de ejemplo (32 inscriptos), 5 premios y el mismo administrador que `administradores.sql` (usuario `ONIET3030`).
 
 ## Subirlo al hosting (cPanel)
 
 En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a través de "Setup Python App" de cPanel. Pasos:
 
-1. **Crear la base de datos.** En cPanel → *Bases de datos MySQL*: crear una base (por ejemplo `micuenta_sorteo`), crear un usuario con una contraseña segura y agregar ese usuario a la base con *Todos los privilegios*. Después, en *phpMyAdmin*, elegir esa base e **importar el script de la base** (crea `estudiantes`, `premios` y `ganadores`; ver [Base de datos](#base-de-datos)). Las tablas propias del sorteador (`configuracion`, `sorteo` y `pantallas`) las crea él solo al arrancar.
+1. **Crear la base de datos.** En cPanel → *Bases de datos MySQL*: crear una base (por ejemplo `micuenta_sorteo`), crear un usuario con una contraseña segura y agregar ese usuario a la base con *Todos los privilegios*. Después, en *phpMyAdmin*, elegir esa base e **importar el script de la base** (crea `estudiantes`, `premios` y `ganadores`) y después **`administradores.sql`** (carpeta `Base de Datos` del repositorio: crea la tabla `administradores` con el usuario `ONIET3030`). Ver [Base de datos](#base-de-datos). Las tablas propias del sorteador (`configuracion`, `sorteo` y `pantallas`) las crea él solo al arrancar.
 2. **Subir los archivos** a una carpeta de la cuenta que **no** esté dentro de `public_html` (por ejemplo `/home/micuenta/sorteador`), con el Administrador de archivos (subiendo un .zip y extrayéndolo) o con *Git Version Control*. Hay que subir todo menos `.venv`, `__pycache__` y `sorteador.db`. Las carpetas `recursos` y `herramientas` no hacen falta en el hosting.
 3. **Crear la aplicación.** En cPanel → *Setup Python App* → *Create Application*:
    - *Python version*: 3.9 o más nueva (conviene la más nueva que ofrezca).
@@ -36,7 +36,7 @@ En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a t
    - *Application URL*: el dominio o una subcarpeta (por ejemplo `midominio.com/sorteo`; funciona igual).
    - *Application startup file*: `passenger_wsgi.py`.
    - *Application Entry point*: `application`.
-4. **Configurar.** En la carpeta de la aplicación, copiar `.env.ejemplo` como `.env` y completarlo: los datos de la base del paso 1 y, si se quiere cambiar la predeterminada, la contraseña del administrador (ver [Configuración](#configuración)). En lugar del archivo se pueden cargar las mismas variables en la página de la aplicación, en *Environment variables*.
+4. **Configurar.** En la carpeta de la aplicación, copiar `.env.ejemplo` como `.env` y completarlo con los datos de la base del paso 1 (ver [Configuración](#configuración)). En lugar del archivo se pueden cargar las mismas variables en la página de la aplicación, en *Environment variables*.
 5. **Instalar las dependencias.** En la página de la aplicación, en *Configuration files*, agregar `requirements.txt` y tocar *Run Pip Install*. (O desde la *Terminal* de cPanel: activar el entorno con el comando que muestra la página de la aplicación, arriba de todo, y ejecutar `pip install -r requirements.txt`.)
 6. **Reiniciar** la aplicación (botón *Restart*). Hay que hacerlo cada vez que se cambia el `.env` o se sube código nuevo.
 7. **Activar https.** En cPanel → *SSL/TLS Status* (AutoSSL) el dominio tiene que tener certificado, y en *Dominios* conviene activar *Force HTTPS Redirect*. El administrador solo guarda la sesión por https.
@@ -59,7 +59,6 @@ Se lee de variables de entorno o del archivo `.env` en la carpeta del programa (
 |----------|----------|
 | `SORTEADOR_DB_NOMBRE`, `SORTEADOR_DB_USUARIO`, `SORTEADOR_DB_CLAVE`, `SORTEADOR_DB_HOST`, `SORTEADOR_DB_PUERTO` | Datos de la base MySQL/MariaDB. La contraseña puede tener cualquier símbolo. |
 | `SORTEADOR_DB_URL` | En lugar de lo anterior, la URL completa de la base. |
-| `SORTEADOR_CLAVE_ADMIN` | Contraseña del administrador (la piden la llave de la pantalla y `/admin`). Si falta, vale la predeterminada, guardada como hash en `config.py`. Puede ser el texto de la contraseña o, mejor, el hash que genera `python gestion.py clave`. |
 | `SORTEADOR_CLAVE_SECRETA` | Texto largo al azar para firmar la sesión del administrador (`python -c "import secrets; print(secrets.token_hex(32))"`). Si falta, se genera una al azar y se guarda en la base (tabla `configuracion`). |
 | `SORTEADOR_COOKIE_SEGURA` | `1` (por defecto): la sesión solo viaja por https. Poner `0` solo si el sitio todavía no tiene certificado. |
 | `SORTEADOR_ZONA_HORARIA` | Para la hora de cada ganador. Por defecto `America/Argentina/Cordoba`. |
@@ -68,10 +67,13 @@ Sin `SORTEADOR_DB_NOMBRE` ni `SORTEADOR_DB_URL`, usa SQLite (`sorteador.db`) con
 
 ### Seguridad
 
-- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con la contraseña correcta.
+- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con un usuario y una contraseña correctos.
+- Los usuarios están en la tabla `administradores`. De la contraseña se guarda solo un hash PBKDF2-SHA256 (1.000.000 de iteraciones, con sal al azar): no se puede revertir para obtener la contraseña. El usuario distingue mayúsculas y minúsculas.
+- Si se borra un usuario de la tabla, su sesión se cierra en el siguiente pedido.
+- Cuando el usuario o la contraseña no coinciden, la respuesta es la misma (y tarda lo mismo) exista o no el usuario.
 - Los pedidos que cambian algo además llevan una cabecera propia (`X-Sorteador`), que una página de otro sitio no puede agregar: así no puede aprovechar una sesión abierta.
 - El listado público de participantes solo lleva el id, el nombre y el apellido: nunca el DNI, el legajo ni el email.
-- Después de 5 contraseñas incorrectas seguidas desde una misma dirección (en la llave o en `/admin`), hay que esperar unos minutos.
+- Después de 5 intentos fallidos seguidos desde una misma dirección (en la llave o en `/admin`), hay que esperar unos minutos.
 - La sesión dura 12 horas; el botón *Salir* la cierra.
 
 ## Participantes
@@ -102,7 +104,7 @@ Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlac
 - **No se puede ganar dos veces**: cuando el administrador toca Continuar, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron). Abajo del listado se cuenta cuántos ya ganaron.
 - En cada sorteo el listado da al menos 3 vueltas completas, por más participantes que haya. Con cientos, el tramo rápido se ve borroso, como un tambor girando.
 - 🔊 (arriba a la derecha) activa o desactiva el sonido.
-- 🔑 (abajo del sonido) pide la contraseña y, si es correcta, abre el administrador en otra ventana. Si el navegador bloquea la ventana nueva, en el mismo panel aparece un enlace para abrirla.
+- 🔑 (abajo del sonido) pide usuario y contraseña y, si son correctos, abre el administrador en otra ventana. Si el navegador bloquea la ventana nueva, en el mismo panel aparece un enlace para abrirla.
 - **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con la palanca y la mascota a su derecha, y el logo de la Universidad abajo. Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 64% (`PARTE_MAQUINA`) y la mascota y la palanca se achican juntas, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
 
 ## Mascota y palanca
@@ -147,11 +149,11 @@ app.py                  Servidor Flask: páginas, API, sesión del administrador
 passenger_wsgi.py       Punto de entrada para el hosting (cPanel / Passenger)
 config.py               Configuración (variables de entorno o archivo .env)
 database.py             Tablas (SQLAlchemy) y conexión a SQLite o MySQL
-gestion.py              Tareas desde la terminal: crear tablas, datos de ejemplo, contraseña
+gestion.py              Tareas desde la terminal: crear tablas, datos de ejemplo, administradores
 .env.ejemplo            Modelo del archivo de configuración
 templates/index.html    Pantalla del sorteador
 templates/admin.html    Administrador
-templates/entrar.html   Contraseña del administrador
+templates/entrar.html   Usuario y contraseña del administrador
 templates/error.html    Aviso cuando no hay conexión con la base
 static/css/styles.css   Estilos de la pantalla (paleta del afiche del sorteo)
 static/css/admin.css    Estilos del administrador
@@ -187,6 +189,7 @@ Tablas del evento. En el hosting se crean importando el script de la base en php
 | `estudiantes` | `id`, `legajo`, `dni`, `nombre`, `apellido`, `email`, `inscripto` (0/1), `fecha_inscripcion`. Participan los que tienen `inscripto = 1` |
 | `premios`     | `id`, `nombre` (hasta 150 caracteres)                                                      |
 | `ganadores`   | `id_estudiante`, `id_premio`, `fecha`. Nadie gana dos veces y cada premio se entrega una sola vez (claves únicas) |
+| `administradores` | `id`, `usuario` (único, distingue mayúsculas), `clave_hash`. Se crea con `administradores.sql` |
 
 Tablas propias del sorteador, que crea solo al arrancar:
 
@@ -196,6 +199,12 @@ Tablas propias del sorteador, que crea solo al arrancar:
 | `sorteo`        | Una fila: estado del sorteo, número, último ganador y versiones       |
 | `pantallas`     | Pantallas abiertas y cuándo avisaron por última vez                   |
 
+**Administradores.** `Base de Datos/administradores.sql` crea la tabla y el usuario `ONIET3030`; se puede volver a importar (si el usuario existe, le vuelve a poner esa contraseña). Para agregar un usuario o cambiar una contraseña:
+
+- Con terminal: `python gestion.py admin USUARIO` (pide la contraseña y la guarda como hash).
+- Sin terminal: en la computadora, `python gestion.py clave USUARIO` muestra el SQL con el hash, para ejecutarlo en phpMyAdmin (pestaña *SQL*).
+- Para quitar un usuario: borrar su fila de `administradores`.
+
 La base no deja borrar un estudiante que ganó ni un premio entregado. Para el día del evento se vacían los ganadores con *Reiniciar ganadores* (o con el reset que trae el script de la base).
 
 Si en la computadora quedó un `sorteador.db` de la versión anterior (con la tabla `participantes`), el sorteador avisa que no lo puede usar: se borra con `python gestion.py reset`.
@@ -204,8 +213,9 @@ Tareas desde la terminal (en el hosting, con el entorno de la aplicación activa
 
 ```powershell
 python gestion.py iniciar                      # crea las tablas que falten y prueba la conexión
-python gestion.py demo                         # carga estudiantes y premios de ejemplo, si están vacíos
-python gestion.py clave                        # genera el hash de la contraseña del administrador
+python gestion.py demo                         # carga estudiantes, premios y el administrador de ejemplo, si están vacíos
+python gestion.py admin USUARIO                # crea un administrador o le cambia la contraseña
+python gestion.py clave USUARIO                # muestra el SQL con el hash, para phpMyAdmin
 python gestion.py reset                        # borra la base SQLite local (solo en la computadora)
 ```
 
@@ -219,7 +229,7 @@ Las marcadas con 🔒 necesitan la sesión del administrador (y, si cambian algo
 | POST   | `/api/adios?cliente=…`                  | La pantalla avisa que se cierra                              |
 | GET    | `/api/participantes?orden=apellido\|id` | Estudiantes inscriptos (id, nombre y apellido), con estado de ganador |
 | POST   | `/api/revelado`                         | La pantalla avisa que ya muestra al ganador (`{"numero": 7}`) |
-| POST   | `/api/entrar`                           | La llave de la pantalla: abre la sesión del administrador (`{"clave": "..."}`) |
+| POST   | `/api/entrar`                           | La llave de la pantalla: abre la sesión del administrador (`{"usuario": "...", "clave": "..."}`) |
 | PUT    | `/api/orden` 🔒                          | Cambia el orden del listado (`{"orden": "id"}`)              |
 | GET    | `/api/premios` 🔒                        | Premios y, si ya se entregó, a quién                         |
 | POST   | `/api/premios` 🔒                        | Agrega un premio (`{"nombre": "..."}`)                       |

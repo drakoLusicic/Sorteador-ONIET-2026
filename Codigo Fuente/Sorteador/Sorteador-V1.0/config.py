@@ -62,17 +62,11 @@ def _url_base_de_datos():
 URL_BASE_DE_DATOS = _url_base_de_datos()
 
 # Sin base configurada se usa SQLite local y, si está vacía, se cargan
-# participantes y premios de ejemplo.
+# estudiantes, premios y el administrador de ejemplo.
 DEMO = not (_variable("SORTEADOR_DB_URL") or _variable("SORTEADOR_DB_NOMBRE"))
 
-# Contraseña del administrador (la pide la llave de la pantalla y /admin).
-# Puede ser el texto de la contraseña o un hash generado con
-# `python gestion.py clave`. Si no se configura, vale la predeterminada, que
-# acá está guardada como hash para no dejarla escrita en el código.
-CLAVE_ADMIN_PREDETERMINADA = (
-    "pbkdf2:sha256:1000000$g59PQp9Mr0uWKlOY$8bb9671330c7d9061f6dad0e4124a6e2c22e87b61206a24a4eb7ca4e4377de69"
-)
-CLAVE_ADMIN = os.environ.get("SORTEADOR_CLAVE_ADMIN") or CLAVE_ADMIN_PREDETERMINADA
+# Los usuarios y contraseñas del administrador están en la base (tabla
+# administradores): ver administradores.sql y `python gestion.py admin`.
 
 # Clave para firmar la sesión del administrador. Si no se define, se genera una
 # al azar y se guarda en la base de datos (tabla configuracion).

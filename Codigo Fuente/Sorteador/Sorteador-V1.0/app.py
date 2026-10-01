@@ -1,11 +1,13 @@
 """Sorteador ONIET 30 - servidor Flask.
 
 Sirve dos ventanas: la pantalla del sorteador (`/`), que se proyecta al
-público, y el administrador (`/admin`, con contraseña), desde donde se
-sortea, se ordena el listado y se manejan los premios. Los participantes son
-los estudiantes inscriptos (tabla estudiantes, inscripto = 1).
-La pantalla no tiene controles del sorteo: solo el botón de la llave, que
-pide la contraseña y abre el administrador en otra ventana.
+público, y el administrador (`/admin`, con usuario y contraseña), desde
+donde se sortea, se ordena el listado y se manejan los premios. Los
+participantes son los estudiantes inscriptos (tabla estudiantes,
+inscripto = 1) y los usuarios del administrador están en la tabla
+administradores. La pantalla no tiene controles del sorteo: solo el botón
+de la llave, que pide usuario y contraseña y abre el administrador en otra
+ventana.
 
 Las ventanas consultan el estado cada segundo (`/api/estado`). El estado del
 sorteo se guarda en la base de datos y no en memoria: en el hosting
@@ -16,7 +18,6 @@ En la computadora se ejecuta con `python app.py`; en el hosting lo carga
 `passenger_wsgi.py`.
 """
 
-import hmac
 import json
 import logging
 import os
@@ -44,7 +45,7 @@ from werkzeug.security import check_password_hash
 
 import config
 import database as bd
-from database import estudiantes, ganadores, pantallas, premios
+from database import administradores, estudiantes, ganadores, pantallas, premios
 from database import sorteo as tabla_sorteo
 
 PUERTO = 5000
@@ -144,17 +145,41 @@ def _cabeceras_seguridad(resp):
 
 
 # --------------------------------------------------------------------------- #
-# Administrador: contraseña y sesión
+# Administrador: usuario, contraseña y sesión
 # --------------------------------------------------------------------------- #
+MAX_LARGO_USUARIO = 50  # administradores.usuario es VARCHAR(50)
+MAX_LARGO_CLAVE = 200
+
+# Si el usuario no existe se compara igual contra este hash (de una clave al
+# azar que nadie conoce), así la respuesta tarda lo mismo y no deja averiguar
+# qué usuarios existen.
+HASH_DE_RELLENO = (
+    "pbkdf2:sha256:1000000$rxrbFb324OtDyCoF$225046f8297879447c3d078b7014d16b83a67af6c783f56a9ca264f121b202bd"
+)
+
+
 def es_admin():
-    return session.get("admin") is True
+    """La sesión guarda el usuario; si lo borraron de la base, se cierra."""
+    usuario = session.get("admin")
+    if not isinstance(usuario, str):
+        return False
+    with bd.conexion() as con:
+        return bd.buscar_admin(con, usuario) is not None
 
 
-def clave_correcta(clave):
-    guardada = config.CLAVE_ADMIN
-    if guardada.startswith(("pbkdf2:", "scrypt:")):  # hash de `python gestion.py clave`
-        return check_password_hash(guardada, clave)
-    return hmac.compare_digest(clave.encode(), guardada.encode())
+def credenciales_correctas(usuario, clave):
+    """Compara la contraseña con el hash guardado en la tabla administradores."""
+    if not usuario or len(usuario) > MAX_LARGO_USUARIO or len(clave) > MAX_LARGO_CLAVE:
+        return False
+    with bd.conexion() as con:
+        admin = bd.buscar_admin(con, usuario)
+    correcta = check_password_hash(admin["clave_hash"] if admin else HASH_DE_RELLENO, clave)
+    return admin is not None and correcta
+
+
+def hay_admins():
+    with bd.conexion() as con:
+        return contar(con, administradores) > 0
 
 
 # Intentos fallidos por dirección IP (por proceso; alcanza para frenar a
@@ -178,19 +203,22 @@ def anotar_fallo(ip):
         _fallos.setdefault(ip, []).append(time.monotonic())
 
 
-def intentar_entrar(clave):
-    """Si la contraseña es correcta, abre la sesión del administrador y
-    devuelve None; si no, devuelve el aviso para mostrar."""
+def intentar_entrar(usuario, clave):
+    """Si el usuario y la contraseña son correctos, abre la sesión del
+    administrador y devuelve None; si no, devuelve el aviso para mostrar."""
     ip = request.remote_addr or "?"
     if demasiados_fallos(ip):
         return "Demasiados intentos fallidos. Esperá unos minutos."
-    if not clave_correcta(clave):
+    usuario = usuario.strip()
+    if not credenciales_correctas(usuario, clave):
         anotar_fallo(ip)
         time.sleep(1)
-        return "Contraseña incorrecta."
+        if not hay_admins():
+            return "Todavía no hay administradores en la base: falta importar administradores.sql."
+        return "Usuario o contraseña incorrectos."
     session.clear()
     session.permanent = True
-    session["admin"] = True
+    session["admin"] = usuario
     return None
 
 
@@ -341,13 +369,14 @@ def entrar():
         return redirect(url_for("administrador"))
 
     aviso = None
+    usuario = request.form.get("usuario", "")
     if request.method == "POST":
-        aviso = intentar_entrar(request.form.get("clave", ""))
+        aviso = intentar_entrar(usuario, request.form.get("clave", ""))
         if aviso is None:
             return redirect(url_for("administrador"))
     # Con la cookie segura, sin https el navegador no la guarda.
     sin_https = app.config["SESSION_COOKIE_SECURE"] and not request.is_secure
-    return render_template("entrar.html", aviso=aviso, sin_https=sin_https)
+    return render_template("entrar.html", aviso=aviso, usuario=usuario, sin_https=sin_https)
 
 
 @app.post("/admin/salir")
@@ -446,11 +475,12 @@ def revelado():
 
 @app.post("/api/entrar")
 def entrar_desde_pantalla():
-    """El botón de la llave de la pantalla: con la contraseña correcta abre la
-    sesión del administrador, y la pantalla abre su ventana."""
+    """El botón de la llave de la pantalla: con el usuario y la contraseña
+    correctos abre la sesión del administrador, y la pantalla abre su ventana."""
     if request.headers.get("X-Sorteador") != "1":
         return error("Pedido no permitido.", 403)
-    aviso = intentar_entrar(str((request.get_json(silent=True) or {}).get("clave") or ""))
+    datos = request.get_json(silent=True) or {}
+    aviso = intentar_entrar(str(datos.get("usuario") or ""), str(datos.get("clave") or ""))
     if aviso:
         return error(aviso, 401)
     return jsonify(ok=True)
