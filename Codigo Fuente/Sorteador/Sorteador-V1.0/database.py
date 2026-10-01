@@ -3,10 +3,15 @@
 Funciona con SQLite (archivo local, para probar en la computadora) y con
 MySQL/MariaDB (la del hosting). La conexión se configura en config.py.
 
-Tablas:
-- participantes: quienes entran en el sorteo.
-- premios: los premios que se pueden sortear.
-- ganadores: quién ganó qué y cuándo (nadie puede ganar dos veces).
+Tablas del evento (en el hosting se crean importando el script de la base
+en phpMyAdmin; en la computadora, las crea el sorteador):
+- estudiantes: participan los que tienen inscripto = 1 (los marca el
+  formulario de inscripción). El sorteador solo los lee.
+- premios: cada premio se sortea una sola vez.
+- ganadores: quién ganó qué y cuándo. Nadie puede ganar dos veces y ningún
+  premio se entrega dos veces.
+
+Tablas propias del sorteador (las crea solo, también en el hosting):
 - configuracion: clave/valor (premio elegido, orden del listado y la clave
   que firma la sesión del administrador).
 - sorteo: una sola fila con el estado del sorteo en curso. Está en la base
@@ -26,11 +31,15 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
+    SmallInteger,
     String,
     Table,
     Text,
+    UniqueConstraint,
+    and_,
     create_engine,
     delete,
     event,
@@ -41,6 +50,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
@@ -48,40 +58,65 @@ import config
 
 metadata = MetaData()
 _MYSQL = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
+_MYSQL_EVENTO = {**_MYSQL, "mysql_collate": "utf8mb4_unicode_ci"}
 
-participantes = Table(
-    "participantes",
+# Tipos iguales a los del script de la base (INT UNSIGNED y TINYINT(1) en MySQL).
+_ID = Integer().with_variant(mysql.INTEGER(unsigned=True), "mysql", "mariadb")
+_BANDERA = SmallInteger().with_variant(mysql.TINYINT(1), "mysql", "mariadb")
+
+estudiantes = Table(
+    "estudiantes",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("id", _ID, primary_key=True, autoincrement=True),
+    Column("legajo", String(20), nullable=False),
+    Column("dni", String(15), nullable=False),
     Column("nombre", String(100), nullable=False),
     Column("apellido", String(100), nullable=False),
-    **_MYSQL,
+    Column("email", String(150)),
+    Column("inscripto", _BANDERA, nullable=False, server_default=text("0")),
+    Column("fecha_inscripcion", DateTime),
+    UniqueConstraint("legajo", name="uq_estudiantes_legajo"),
+    UniqueConstraint("dni", name="uq_estudiantes_dni"),
+    Index("idx_estudiantes_inscripto", "inscripto"),
+    **_MYSQL_EVENTO,
 )
 
 premios = Table(
     "premios",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("nombre", String(80), nullable=False),
-    **_MYSQL,
+    Column("id", _ID, primary_key=True, autoincrement=True),
+    Column("nombre", String(150), nullable=False),
+    **_MYSQL_EVENTO,
 )
 
 ganadores = Table(
     "ganadores",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("id", _ID, primary_key=True, autoincrement=True),
     Column(
-        "participante_id",
-        Integer,
-        ForeignKey("participantes.id", ondelete="CASCADE"),
+        "id_estudiante",
+        _ID,
+        ForeignKey("estudiantes.id", name="fk_ganadores_estudiante", ondelete="RESTRICT", onupdate="CASCADE"),
         nullable=False,
-        unique=True,
     ),
-    Column("premio", String(80), nullable=False),  # el nombre queda aunque se borre el premio
-    Column("premio_id", Integer, ForeignKey("premios.id", ondelete="SET NULL")),
-    Column("fecha", DateTime, nullable=False),
-    **_MYSQL,
+    Column(
+        "id_premio",
+        _ID,
+        ForeignKey("premios.id", name="fk_ganadores_premio", ondelete="RESTRICT", onupdate="CASCADE"),
+        nullable=False,
+    ),
+    Column("fecha", DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    UniqueConstraint("id_estudiante", name="uq_ganadores_estudiante"),
+    UniqueConstraint("id_premio", name="uq_ganadores_premio"),
+    **_MYSQL_EVENTO,
 )
+
+# Quienes participan del sorteo: los estudiantes inscriptos.
+INSCRIPTO = estudiantes.c.inscripto == 1
+# Inscriptos que todavía no ganaron: entre ellos se sortea.
+EN_JUEGO = and_(INSCRIPTO, estudiantes.c.id.not_in(select(ganadores.c.id_estudiante)))
+# Premios que todavía no se entregaron.
+SIN_ENTREGAR = premios.c.id.not_in(select(ganadores.c.id_premio))
 
 configuracion = Table(
     "configuracion",
@@ -115,8 +150,8 @@ pantallas = Table(
 )
 
 # Datos de ejemplo (nombre, apellido): se cargan solos en la base SQLite local,
-# o con `python gestion.py demo`.
-PARTICIPANTES_DEMO = [
+# o con `python gestion.py demo`. Uno de cada cinco queda sin inscribir.
+ESTUDIANTES_DEMO = [
     ("Martina", "González"), ("Tomás", "Rodríguez"), ("Valentina", "Fernández"),
     ("Joaquín", "López"), ("Camila", "Martínez"), ("Santiago", "Ávila"),
     ("Lucía", "Pérez"), ("Mateo", "Gómez"), ("Sofía", "Díaz"),
@@ -234,7 +269,7 @@ def init_db():
     """Crea las tablas que falten y la fila del estado del sorteo. Se puede
     llamar muchas veces (y desde varios procesos a la vez)."""
     metadata.create_all(motor())
-    _migrar()
+    _revisar_tablas()
     _insertar_si_falta(
         sorteo,
         {"id": 1, "estado": "listo", "numero": 0, "ultimo": None, "version": 0, "version_participantes": 0},
@@ -254,71 +289,43 @@ def _insertar_si_falta(tabla, valores, condicion):
         pass  # otro proceso la insertó al mismo tiempo
 
 
-def _migrar():
-    """Adapta una base SQLite creada con una versión anterior del sorteador."""
+def _revisar_tablas():
+    """La tabla ganadores de la versión anterior del sorteador (con
+    participante_id) tiene otras columnas: create_all no la cambia, así que se
+    avisa en vez de fallar más adelante en cada consulta."""
     columnas = {c["name"] for c in inspect(motor()).get_columns("ganadores")}
-    if "premio_id" not in columnas:
-        with transaccion() as con:
-            con.execute(text("ALTER TABLE ganadores ADD COLUMN premio_id INTEGER REFERENCES premios(id)"))
-    with transaccion() as con:
-        con.execute(delete(configuracion).where(configuracion.c.clave == "premio"))
+    if "id_estudiante" not in columnas:
+        raise RuntimeError(
+            "La tabla ganadores es de la versión anterior del sorteador. En el hosting, importá el "
+            "script de la base (crea estudiantes, premios y ganadores); en la computadora, "
+            "ejecutá `python gestion.py reset`."
+        )
 
 
 def cargar_demo():
-    """Carga participantes y premios de ejemplo en las tablas que estén vacías.
+    """Carga estudiantes y premios de ejemplo en las tablas que estén vacías.
     Devuelve cuántos de cada uno cargó."""
-    cargados = {"participantes": 0, "premios": 0}
+    cargados = {"estudiantes": 0, "premios": 0}
     with transaccion() as con:
-        if con.execute(select(func.count()).select_from(participantes)).scalar_one() == 0:
-            con.execute(insert(participantes), [{"nombre": n, "apellido": a} for n, a in PARTICIPANTES_DEMO])
-            cargados["participantes"] = len(PARTICIPANTES_DEMO)
+        if con.execute(select(func.count()).select_from(estudiantes)).scalar_one() == 0:
+            ahora = ahora_local()
+            filas = []
+            for i, (nombre, apellido) in enumerate(ESTUDIANTES_DEMO):
+                inscripto = 0 if i % 5 == 4 else 1
+                filas.append({
+                    "legajo": str(10001 + i),
+                    "dni": str(45000001 + i),
+                    "nombre": nombre,
+                    "apellido": apellido,
+                    "inscripto": inscripto,
+                    "fecha_inscripcion": ahora if inscripto else None,
+                })
+            con.execute(insert(estudiantes), filas)
+            cargados["estudiantes"] = len(filas)
         if con.execute(select(func.count()).select_from(premios)).scalar_one() == 0:
             con.execute(insert(premios), [{"nombre": p} for p in PREMIOS_DEMO])
             cargados["premios"] = len(PREMIOS_DEMO)
     return cargados
-
-
-# --------------------------------------------------------------------------- #
-# Carga de participantes
-# --------------------------------------------------------------------------- #
-def importar_participantes(con, filas, reemplazar=False):
-    """Carga participantes (dicts con nombre, apellido y, opcionalmente, id).
-
-    - reemplazar=True: borra todos los participantes (y los ganadores) antes.
-    - reemplazar=False: agrega los nuevos; si un id ya existe, le actualiza el
-      nombre y el apellido (así se puede corregir un dato volviendo a importar).
-    """
-    if reemplazar:
-        con.execute(delete(ganadores))
-        con.execute(delete(participantes))
-        existentes = set()
-    else:
-        existentes = set(con.execute(select(participantes.c.id)).scalars())
-
-    con_id = [f for f in filas if f.get("id") is not None and f["id"] not in existentes]
-    sin_id = [f for f in filas if f.get("id") is None]
-    a_actualizar = [f for f in filas if f.get("id") is not None and f["id"] in existentes]
-
-    # Primero los que traen id, así los autonuméricos siguen después del mayor.
-    if con_id:
-        con.execute(insert(participantes), [{"id": f["id"], "nombre": f["nombre"], "apellido": f["apellido"]} for f in con_id])
-    if sin_id:
-        con.execute(insert(participantes), [{"nombre": f["nombre"], "apellido": f["apellido"]} for f in sin_id])
-    for f in a_actualizar:
-        con.execute(
-            update(participantes)
-            .where(participantes.c.id == f["id"])
-            .values(nombre=f["nombre"], apellido=f["apellido"])
-        )
-
-    if con_id and con.dialect.name == "postgresql":
-        # En PostgreSQL insertar ids a mano no mueve el contador automático.
-        con.execute(
-            text("SELECT setval(pg_get_serial_sequence('participantes', 'id'), (SELECT MAX(id) FROM participantes))")
-        )
-
-    total = con.execute(select(func.count()).select_from(participantes)).scalar_one()
-    return {"agregados": len(con_id) + len(sin_id), "actualizados": len(a_actualizar), "total": total}
 
 
 def borrar_pantallas_viejas(con, limite):

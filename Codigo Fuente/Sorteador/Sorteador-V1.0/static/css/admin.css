@@ -234,6 +234,20 @@ input:focus-visible {
   font-weight: 600;
 }
 
+/* Ya entregado: no se puede elegir ni quitar. */
+.premio.entregado label {
+  cursor: default;
+}
+
+.premio.entregado .premio-nombre {
+  color: var(--texto-suave);
+  text-decoration: line-through;
+}
+
+.btn-quitar:disabled {
+  visibility: hidden;
+}
+
 .btn-quitar {
   flex-shrink: 0;
   width: 28px;
@@ -429,59 +443,8 @@ select:disabled {
   gap: 12px;
 }
 
-/* Carga de participantes */
-.form-importar {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--borde);
-}
-
-.form-importar h3 {
-  font-size: 0.95rem;
-}
-
-.form-importar a,
 .entrar a {
   color: var(--acento-2);
-}
-
-.form-importar input[type='file'] {
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--texto-suave);
-}
-
-.form-importar .btn {
-  justify-self: start;
-}
-
-.modo-importar {
-  display: grid;
-  gap: 4px;
-  border: none;
-  font-size: 0.9rem;
-}
-
-.modo-importar label {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.modo-importar input {
-  accent-color: var(--acento);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 /* Página para entrar al administrador */

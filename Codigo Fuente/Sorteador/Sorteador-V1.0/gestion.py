@@ -1,10 +1,7 @@
 """Tareas de mantenimiento del sorteador, desde la línea de comandos.
 
-    python gestion.py iniciar                 Crea las tablas y prueba la conexión.
-    python gestion.py importar ARCHIVO        Agrega participantes desde un .csv o .xlsx.
-    python gestion.py importar ARCHIVO --reemplazar
-                                              Reemplaza todos los participantes (y borra los ganadores).
-    python gestion.py demo                    Carga participantes y premios de ejemplo (si están vacíos).
+    python gestion.py iniciar                 Crea las tablas que falten y prueba la conexión.
+    python gestion.py demo                    Carga estudiantes y premios de ejemplo (si están vacíos).
     python gestion.py clave                   Genera el hash de una contraseña para SORTEADOR_CLAVE_ADMIN.
     python gestion.py reset                   Borra la base SQLite local (solo para pruebas).
 
@@ -17,12 +14,10 @@ import getpass
 import sys
 from pathlib import Path
 
-from sqlalchemy import update
 from sqlalchemy.engine import make_url
 
 import config
 import database as bd
-from importacion import ErrorImportacion, leer_participantes
 
 
 def iniciar():
@@ -31,37 +26,10 @@ def iniciar():
     print(f"Tablas listas en {url.render_as_string(hide_password=True)}")
 
 
-def importar(ruta, reemplazar):
-    archivo = Path(ruta)
-    if not archivo.is_file():
-        sys.exit(f"No existe el archivo {archivo}")
-    try:
-        filas = leer_participantes(archivo.name, archivo.read_bytes())
-    except ErrorImportacion as exc:
-        sys.exit(str(exc))
-    bd.init_db()
-    with bd.transaccion() as con:
-        estado = con.execute(bd.sorteo.select().where(bd.sorteo.c.id == 1)).mappings().one()["estado"]
-        if estado != "listo":
-            sys.exit("Hay un sorteo en curso: esperá a que termine.")
-        resultado = bd.importar_participantes(con, filas, reemplazar=reemplazar)
-        valores = {
-            "version": bd.sorteo.c.version + 1,
-            "version_participantes": bd.sorteo.c.version_participantes + 1,
-        }
-        if reemplazar:
-            valores["ultimo"] = None
-        con.execute(update(bd.sorteo).where(bd.sorteo.c.id == 1).values(**valores))
-    print(
-        f"Agregados: {resultado['agregados']} · Actualizados: {resultado['actualizados']} · "
-        f"Total de participantes: {resultado['total']}"
-    )
-
-
 def demo():
     bd.init_db()
     cargados = bd.cargar_demo()
-    print(f"Cargados {cargados['participantes']} participantes y {cargados['premios']} premios de ejemplo.")
+    print(f"Cargados {cargados['estudiantes']} estudiantes y {cargados['premios']} premios de ejemplo.")
 
 
 def clave():
@@ -88,11 +56,9 @@ def reset():
 def main(argumentos):
     if not argumentos:
         sys.exit(__doc__)
-    comando, resto = argumentos[0], argumentos[1:]
+    comando = argumentos[0]
     if comando == "iniciar":
         iniciar()
-    elif comando == "importar" and resto:
-        importar(resto[0], reemplazar="--reemplazar" in resto)
     elif comando == "demo":
         demo()
     elif comando == "clave":

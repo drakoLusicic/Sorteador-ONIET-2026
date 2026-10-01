@@ -22,13 +22,13 @@ Para abrir el administrador, tocar el botón 🔑 (arriba a la derecha, abajo de
 
 Para levantar solo el servidor, sin abrir ventanas: `python app.py --sin-ventanas`.
 
-Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 participantes y 5 premios de ejemplo. El administrador pide la contraseña predeterminada, salvo que se configure otra en el archivo `.env` (ver [Configuración](#configuración)).
+Sin configuración, usa el archivo `sorteador.db` (SQLite) y, si está vacío, carga 40 estudiantes de ejemplo (32 inscriptos) y 5 premios. El administrador pide la contraseña predeterminada, salvo que se configure otra en el archivo `.env` (ver [Configuración](#configuración)).
 
 ## Subirlo al hosting (cPanel)
 
 En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a través de "Setup Python App" de cPanel. Pasos:
 
-1. **Crear la base de datos.** En cPanel → *Bases de datos MySQL*: crear una base (por ejemplo `micuenta_sorteo`), crear un usuario con una contraseña segura y agregar ese usuario a la base con *Todos los privilegios*. Las tablas las crea el sorteador solo.
+1. **Crear la base de datos.** En cPanel → *Bases de datos MySQL*: crear una base (por ejemplo `micuenta_sorteo`), crear un usuario con una contraseña segura y agregar ese usuario a la base con *Todos los privilegios*. Después, en *phpMyAdmin*, elegir esa base e **importar el script de la base** (crea `estudiantes`, `premios` y `ganadores`; ver [Base de datos](#base-de-datos)). Las tablas propias del sorteador (`configuracion`, `sorteo` y `pantallas`) las crea él solo al arrancar.
 2. **Subir los archivos** a una carpeta de la cuenta que **no** esté dentro de `public_html` (por ejemplo `/home/micuenta/sorteador`), con el Administrador de archivos (subiendo un .zip y extrayéndolo) o con *Git Version Control*. Hay que subir todo menos `.venv`, `__pycache__` y `sorteador.db`. Las carpetas `recursos` y `herramientas` no hacen falta en el hosting.
 3. **Crear la aplicación.** En cPanel → *Setup Python App* → *Create Application*:
    - *Python version*: 3.9 o más nueva (conviene la más nueva que ofrezca).
@@ -40,8 +40,8 @@ En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a t
 5. **Instalar las dependencias.** En la página de la aplicación, en *Configuration files*, agregar `requirements.txt` y tocar *Run Pip Install*. (O desde la *Terminal* de cPanel: activar el entorno con el comando que muestra la página de la aplicación, arriba de todo, y ejecutar `pip install -r requirements.txt`.)
 6. **Reiniciar** la aplicación (botón *Restart*). Hay que hacerlo cada vez que se cambia el `.env` o se sube código nuevo.
 7. **Activar https.** En cPanel → *SSL/TLS Status* (AutoSSL) el dominio tiene que tener certificado, y en *Dominios* conviene activar *Force HTTPS Redirect*. El administrador solo guarda la sesión por https.
-8. **Comprobar.** Abrir `https://midominio.com/salud`: tiene que responder `"ok": true` y `"base": "mysql"`. Si dice que no hay conexión, revisar los datos de la base en el `.env`; el detalle del error queda en el archivo `stderr.log` de la carpeta de la aplicación (o en *Errores* de cPanel).
-9. **Cargar los datos.** Entrar a `https://midominio.com/admin` con la contraseña, cargar los participantes (ver [Participantes](#participantes)) y agregar los premios.
+8. **Comprobar.** Abrir `https://midominio.com/salud`: tiene que responder `"ok": true`, `"base": "mysql"` y en `"participantes"` la cantidad de estudiantes inscriptos. Si dice que no hay conexión, revisar los datos de la base en el `.env`; el detalle del error queda en el archivo `stderr.log` de la carpeta de la aplicación (o en *Errores* de cPanel).
+9. **Revisar los datos.** Los estudiantes y los premios salen de la base. Desde el administrador (🔑 en la pantalla, o `https://midominio.com/admin`) se ve cuántos inscriptos hay y se pueden agregar premios.
 
 El día del evento: abrir la pantalla (`https://midominio.com/`) en la computadora del proyector, ponerla en pantalla completa con F11 y **hacerle un clic** para que el navegador deje reproducir el sonido. El administrador se puede manejar desde otra computadora o desde un celular.
 
@@ -68,34 +68,29 @@ Sin `SORTEADOR_DB_NOMBRE` ni `SORTEADOR_DB_URL`, usa SQLite (`sorteador.db`) con
 
 ### Seguridad
 
-- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, participantes, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con la contraseña correcta.
+- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con la contraseña correcta.
 - Los pedidos que cambian algo además llevan una cabecera propia (`X-Sorteador`), que una página de otro sitio no puede agregar: así no puede aprovechar una sesión abierta.
+- El listado público de participantes solo lleva el id, el nombre y el apellido: nunca el DNI, el legajo ni el email.
 - Después de 5 contraseñas incorrectas seguidas desde una misma dirección (en la llave o en `/admin`), hay que esperar unos minutos.
 - La sesión dura 12 horas; el botón *Salir* la cierra.
 
 ## Participantes
 
-Los participantes están en la tabla `participantes` de la base (`id`, `nombre`, `apellido`). Se cargan de tres maneras:
+Participan los estudiantes **inscriptos**: las filas de la tabla `estudiantes` con `inscripto = 1`. Los marca el formulario de inscripción (o se pueden marcar a mano en phpMyAdmin). El sorteador no modifica esa tabla: solo la lee.
 
-- **Desde el administrador** (lo más simple): en *Participantes → Cargar participantes*, elegir una planilla **.csv o .xlsx** con las columnas `nombre`, `apellido` e `id` (opcional: el número de participante; si no está, se numeran solos). Hay un enlace para descargar una planilla de ejemplo. Se aceptan variantes en los títulos ("Nombres", "APELLIDO", "ID de participante") y columnas de más, que se ignoran; los CSV pueden estar separados por coma o por punto y coma, como los guarda Excel. Se puede elegir:
-  - *Agregar*: suma los nuevos; si un id ya existe, le actualiza el nombre y el apellido (sirve para corregir un dato).
-  - *Reemplazar todos*: borra los participantes cargados y la lista de ganadores, y deja solo los de la planilla.
-
-  Si la planilla tiene algún error (falta un nombre, un id repetido o que no es un número), no se carga nada y se indica en qué fila está el problema.
-- **Desde la terminal**: `python gestion.py importar participantes.xlsx` (con `--reemplazar` para reemplazar todos).
-- **Directamente en la base**, por ejemplo con phpMyAdmin, insertando filas en `participantes`. La pantalla lo nota sola cuando cambia la cantidad de participantes; si solo se corrigió un nombre, hay que recargarla (F5).
-
-No se pueden cargar participantes durante un sorteo.
+- La pantalla muestra el id, el nombre y el apellido de cada inscripto que todavía no ganó.
+- Cuando alguien se inscribe, la pantalla lo suma sola (nota que cambió la cantidad de inscriptos). Si solo se corrigió un nombre, hay que recargarla (F5).
+- El sorteo se hace entre los inscriptos que todavía no ganaron. Quien se inscribe durante un giro entra desde el sorteo siguiente.
 
 ## Uso
 
 ### Administrador
 
-- **Sortear**: la mascota tira de la palanca en la pantalla y el listado gira. Solo se puede sortear si la pantalla está abierta, queda alguien en juego y hay algún premio cargado; si no, abajo del botón dice qué falta.
+- **Sortear**: la mascota tira de la palanca en la pantalla y el listado gira. Solo se puede sortear si la pantalla está abierta, queda algún inscripto en juego y queda algún premio sin entregar; si no, abajo del botón dice qué falta.
 - **Continuar**: cierra la ventana del ganador en la pantalla (también se cierra con Escape en la pantalla, si se abrió en el mismo navegador donde se inició sesión en el administrador).
-- **Premios**: el marcado es el que se sortea a continuación y aparece en la pantalla como "Próximo premio". Sigue marcado después de cada sorteo, así el mismo premio se puede entregar varias veces; al lado se ve cuántas veces se entregó. Se pueden agregar y quitar premios.
+- **Premios**: el marcado es el que se sortea a continuación y aparece en la pantalla como "Próximo premio". **Cada premio se entrega una sola vez**: después del sorteo queda tachado, con el nombre de quien lo ganó, y pasa solo al primero de la lista que falta entregar. Se pueden agregar premios y quitar los que todavía no se entregaron.
 - **Ordenar por**: ordena el listado de la pantalla por apellido o por ID de participante.
-- **Reiniciar ganadores**: borra la lista de ganadores y todos los participantes vuelven a entrar en juego.
+- **Reiniciar ganadores**: borra la lista de ganadores (tabla `ganadores`): todos los inscriptos vuelven a entrar en juego y los premios quedan sin entregar.
 - **Ganadores** (columna de la derecha): cada ganador con su premio y la hora, el más reciente arriba y numerados en el orden en que salieron. El ganador aparece recién cuando la pantalla lo muestra.
 
 Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlace para abrirla. El botón *Salir* cierra la sesión.
@@ -152,8 +147,7 @@ app.py                  Servidor Flask: páginas, API, sesión del administrador
 passenger_wsgi.py       Punto de entrada para el hosting (cPanel / Passenger)
 config.py               Configuración (variables de entorno o archivo .env)
 database.py             Tablas (SQLAlchemy) y conexión a SQLite o MySQL
-importacion.py          Lectura de las planillas de participantes (.csv y .xlsx)
-gestion.py              Tareas desde la terminal: crear tablas, importar, contraseña
+gestion.py              Tareas desde la terminal: crear tablas, datos de ejemplo, contraseña
 .env.ejemplo            Modelo del archivo de configuración
 templates/index.html    Pantalla del sorteador
 templates/admin.html    Administrador
@@ -186,23 +180,31 @@ Todo esto pasa en transacciones de la base: si dos pedidos de sortear llegan jun
 
 ## Base de datos
 
+Tablas del evento. En el hosting se crean importando el script de la base en phpMyAdmin; si no existen, el sorteador las crea vacías con la misma estructura:
+
+| Tabla         | Contenido                                                                                  |
+|---------------|--------------------------------------------------------------------------------------------|
+| `estudiantes` | `id`, `legajo`, `dni`, `nombre`, `apellido`, `email`, `inscripto` (0/1), `fecha_inscripcion`. Participan los que tienen `inscripto = 1` |
+| `premios`     | `id`, `nombre` (hasta 150 caracteres)                                                      |
+| `ganadores`   | `id_estudiante`, `id_premio`, `fecha`. Nadie gana dos veces y cada premio se entrega una sola vez (claves únicas) |
+
+Tablas propias del sorteador, que crea solo al arrancar:
+
 | Tabla           | Contenido                                                             |
 |-----------------|-----------------------------------------------------------------------|
-| `participantes` | `id`, `nombre`, `apellido`                                            |
-| `premios`       | `id`, `nombre`                                                        |
-| `ganadores`     | `participante_id`, `premio` (nombre), `premio_id`, `fecha`            |
 | `configuracion` | clave/valor: `orden` del listado, `premio_id` elegido como próximo y `clave_secreta` de la sesión |
 | `sorteo`        | Una fila: estado del sorteo, número, último ganador y versiones       |
 | `pantallas`     | Pantallas abiertas y cuándo avisaron por última vez                   |
 
-Las tablas se crean solas al arrancar (también en el hosting). Un premio se puede entregar varias veces; si se quita un premio ya entregado, los ganadores conservan su nombre. Una base SQLite de una versión anterior se actualiza sola.
+La base no deja borrar un estudiante que ganó ni un premio entregado. Para el día del evento se vacían los ganadores con *Reiniciar ganadores* (o con el reset que trae el script de la base).
+
+Si en la computadora quedó un `sorteador.db` de la versión anterior (con la tabla `participantes`), el sorteador avisa que no lo puede usar: se borra con `python gestion.py reset`.
 
 Tareas desde la terminal (en el hosting, con el entorno de la aplicación activado):
 
 ```powershell
-python gestion.py iniciar                      # crea las tablas y prueba la conexión
-python gestion.py importar participantes.csv   # agrega participantes (--reemplazar: reemplaza todos)
-python gestion.py demo                         # carga participantes y premios de ejemplo, si están vacíos
+python gestion.py iniciar                      # crea las tablas que falten y prueba la conexión
+python gestion.py demo                         # carga estudiantes y premios de ejemplo, si están vacíos
 python gestion.py clave                        # genera el hash de la contraseña del administrador
 python gestion.py reset                        # borra la base SQLite local (solo en la computadora)
 ```
@@ -215,11 +217,11 @@ Las marcadas con 🔒 necesitan la sesión del administrador (y, si cambian algo
 |--------|-----------------------------------------|--------------------------------------------------------------|
 | GET    | `/api/estado`                           | Estado del sorteo, premio actual, orden y contadores. La pantalla agrega `rol=pantalla&cliente=…&latido=1` para avisar que sigue abierta |
 | POST   | `/api/adios?cliente=…`                  | La pantalla avisa que se cierra                              |
-| GET    | `/api/participantes?orden=apellido\|id` | Lista de participantes, con estado de ganador                |
+| GET    | `/api/participantes?orden=apellido\|id` | Estudiantes inscriptos (id, nombre y apellido), con estado de ganador |
 | POST   | `/api/revelado`                         | La pantalla avisa que ya muestra al ganador (`{"numero": 7}`) |
 | POST   | `/api/entrar`                           | La llave de la pantalla: abre la sesión del administrador (`{"clave": "..."}`) |
 | PUT    | `/api/orden` 🔒                          | Cambia el orden del listado (`{"orden": "id"}`)              |
-| GET    | `/api/premios` 🔒                        | Premios, con cuántas veces se entregó cada uno               |
+| GET    | `/api/premios` 🔒                        | Premios y, si ya se entregó, a quién                         |
 | POST   | `/api/premios` 🔒                        | Agrega un premio (`{"nombre": "..."}`)                       |
 | DELETE | `/api/premios/<id>` 🔒                   | Quita un premio                                              |
 | PUT    | `/api/premio-actual` 🔒                  | Elige el próximo premio (`{"id": 3}`)                        |
@@ -227,7 +229,6 @@ Las marcadas con 🔒 necesitan la sesión del administrador (y, si cambian algo
 | POST   | `/api/sortear` 🔒                        | Elige y registra un ganador; las pantallas lo animan         |
 | POST   | `/api/continuar` 🔒                      | Cierra la ventana del ganador                                |
 | POST   | `/api/reiniciar` 🔒                      | Borra todos los ganadores                                    |
-| POST   | `/api/participantes/importar` 🔒         | Carga una planilla (formulario con `archivo` y `modo=agregar\|reemplazar`) |
 | GET    | `/salud`                                | Comprueba la conexión con la base (para verificar la instalación) |
 
-El ganador se elige en el servidor con `secrets.choice`, entre quienes todavía no ganaron: todos tienen la misma probabilidad, sin importar dónde esté parado el listado ni cuántas vueltas dé. La pantalla solo anima ese resultado.
+El ganador se elige en el servidor con `secrets.choice`, entre los inscriptos que todavía no ganaron: todos tienen la misma probabilidad, sin importar dónde esté parado el listado ni cuántas vueltas dé. La pantalla solo anima ese resultado.

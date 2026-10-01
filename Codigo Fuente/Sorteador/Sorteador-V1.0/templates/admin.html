@@ -34,10 +34,10 @@
 
       <section class="bloque" aria-labelledby="titulo-premios">
         <h2 id="titulo-premios">Premios</h2>
-        <p class="ayuda">Marcá el premio que se sortea a continuación. Sigue marcado después de cada sorteo, así se puede entregar varias veces.</p>
+        <p class="ayuda">Marcá el premio que se sortea a continuación. Cada premio se entrega una sola vez: después del sorteo pasa solo al siguiente que falta entregar.</p>
         <ul id="premios" class="premios"></ul>
         <form id="form-premio" class="form-premio">
-          <input id="nombre-premio" type="text" maxlength="80" autocomplete="off"
+          <input id="nombre-premio" type="text" maxlength="150" autocomplete="off"
                  placeholder="Nombre del premio" aria-label="Nombre del premio nuevo" required>
           <button class="btn" type="submit">Agregar</button>
         </form>
@@ -56,24 +56,10 @@
           <span id="participantes"></span>
           <button id="btn-reiniciar" class="btn btn-chico" type="button" disabled>Reiniciar ganadores</button>
         </div>
-
-        <!-- Carga de participantes desde una planilla (.csv o .xlsx) -->
-        <form id="form-importar" class="form-importar">
-          <h3>Cargar participantes</h3>
-          <p class="ayuda">
-            Una planilla .csv o .xlsx con las columnas <strong>nombre</strong>, <strong>apellido</strong>
-            e <strong>id</strong> (opcional: el número de participante).
-            <a href="{{ url_for('planilla_ejemplo') }}">Descargar planilla de ejemplo</a>
-          </p>
-          <input id="archivo-participantes" name="archivo" type="file" accept=".csv,.xlsx,.txt" required
-                 aria-label="Planilla de participantes">
-          <fieldset class="modo-importar">
-            <legend class="sr-only">Qué hacer con los participantes que ya están cargados</legend>
-            <label><input type="radio" name="modo" value="agregar" checked> Agregar a los que ya están (si un id ya existe, se actualiza)</label>
-            <label><input type="radio" name="modo" value="reemplazar"> Reemplazar todos (borra también la lista de ganadores)</label>
-          </fieldset>
-          <button id="btn-importar" class="btn" type="submit">Cargar</button>
-        </form>
+        <p class="ayuda">
+          Participan los estudiantes inscriptos (en la base, tabla <strong>estudiantes</strong> con
+          <strong>inscripto = 1</strong>). La pantalla suma a los que se van inscribiendo.
+        </p>
       </section>
     </main>
 

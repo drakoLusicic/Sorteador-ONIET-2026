@@ -2,7 +2,8 @@
 
 Sirve dos ventanas: la pantalla del sorteador (`/`), que se proyecta al
 público, y el administrador (`/admin`, con contraseña), desde donde se
-sortea, se ordena el listado y se manejan los premios y los participantes.
+sortea, se ordena el listado y se manejan los premios. Los participantes son
+los estudiantes inscriptos (tabla estudiantes, inscripto = 1).
 La pantalla no tiene controles del sorteo: solo el botón de la llave, que
 pide la contraseña y abre el administrador en otra ventana.
 
@@ -36,19 +37,18 @@ from datetime import timedelta
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import delete, func, insert, select, update
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import check_password_hash
 
 import config
 import database as bd
-from database import configuracion, ganadores, pantallas, participantes, premios
+from database import estudiantes, ganadores, pantallas, premios
 from database import sorteo as tabla_sorteo
-from importacion import ErrorImportacion, leer_participantes
 
 PUERTO = 5000
-MAX_LARGO_PREMIO = 80
+MAX_LARGO_PREMIO = 150  # premios.nombre es VARCHAR(150)
 PANTALLA_VIGENTE = timedelta(seconds=12)  # una pantalla cuenta como abierta si avisó hace menos
 CACHE_ESTADO = 0.5  # segundos que se reutiliza el estado calculado (muchas pantallas consultan a la vez)
 CLIENTE_VALIDO = re.compile(r"[A-Za-z0-9_-]{6,40}")
@@ -68,7 +68,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=config.COOKIE_SEGURA,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
-    MAX_CONTENT_LENGTH=5 * 1024 * 1024,  # planillas de participantes
+    MAX_CONTENT_LENGTH=64 * 1024,  # los pedidos son JSON chicos
 )
 
 
@@ -132,7 +132,7 @@ def _error_api(exc):
 
 @app.errorhandler(RequestEntityTooLarge)
 def _archivo_grande(_exc):
-    return error("El archivo es demasiado grande (máximo 5 MB).", 413)
+    return error("El pedido es demasiado grande.", 413)
 
 
 @app.after_request
@@ -229,10 +229,12 @@ def limpiar_premio(valor):
 
 
 def premio_actual(con):
-    """El premio elegido en el administrador. Un premio se puede sortear
-    varias veces, así que sigue elegido después de cada sorteo. Si no se eligió
-    ninguno (o se quitó), es el primero de la lista."""
-    lista = con.execute(select(premios.c.id, premios.c.nombre).order_by(premios.c.id)).mappings().all()
+    """El premio que se sortea a continuación. Cada premio se entrega una sola
+    vez: es el elegido en el administrador mientras no se haya entregado; si
+    no, el primero de la lista que falta entregar. None si no queda ninguno."""
+    lista = con.execute(
+        select(premios.c.id, premios.c.nombre).where(bd.SIN_ENTREGAR).order_by(premios.c.id)
+    ).mappings().all()
     elegido = bd.leer_config(con, "premio_id")
     for premio in lista:
         if str(premio["id"]) == elegido:
@@ -249,15 +251,14 @@ def contar_pantallas(con):
     return con.execute(select(func.count()).select_from(pantallas).where(pantallas.c.visto >= limite)).scalar_one()
 
 
-def contar(con, tabla):
-    return con.execute(select(func.count()).select_from(tabla)).scalar_one()
+def contar(con, tabla, *condiciones):
+    return con.execute(select(func.count()).select_from(tabla).where(*condiciones)).scalar_one()
 
 
 def foto_estado(con):
-    """Todo lo que las ventanas necesitan saber para dibujarse."""
+    """Todo lo que las ventanas necesitan saber para dibujarse. Los
+    participantes son los estudiantes inscriptos."""
     s = leer_sorteo(con)
-    total = contar(con, participantes)
-    cantidad_ganadores = contar(con, ganadores)
     return {
         "sorteo": s["estado"],
         "numero": s["numero"],
@@ -266,9 +267,9 @@ def foto_estado(con):
         "version_participantes": s["version_participantes"],
         "premio": premio_actual(con),
         "orden": bd.leer_config(con, "orden", "apellido"),
-        "participantes": total,
-        "ganadores": cantidad_ganadores,
-        "en_juego": total - cantidad_ganadores,
+        "participantes": contar(con, estudiantes, bd.INSCRIPTO),
+        "ganadores": contar(con, ganadores),
+        "en_juego": contar(con, estudiantes, bd.EN_JUEGO),
         "pantallas": contar_pantallas(con),
     }
 
@@ -355,17 +356,6 @@ def salir():
     return redirect(url_for("entrar"))
 
 
-@app.get("/admin/planilla-ejemplo.csv")
-@requiere_admin
-def planilla_ejemplo():
-    contenido = "id;nombre;apellido\n1;Martina;González\n2;Tomás;Rodríguez\n3;Valentina;Fernández\n"
-    return Response(
-        "﻿" + contenido,  # con BOM, Excel respeta las tildes
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=participantes-ejemplo.csv"},
-    )
-
-
 @app.get("/salud")
 def salud():
     """Para comprobar la instalación: responde si la base de datos anda."""
@@ -373,7 +363,7 @@ def salud():
         return jsonify(ok=False, base="sin conexión"), 503
     try:
         with bd.conexion() as con:
-            cantidad = contar(con, participantes)
+            cantidad = contar(con, estudiantes, bd.INSCRIPTO)
     except Exception:
         log.exception("Falló la consulta de /salud")
         return jsonify(ok=False, base="error"), 503
@@ -409,13 +399,19 @@ def adios():
 
 @app.get("/api/participantes")
 def listar_participantes():
+    """Los estudiantes inscriptos, con el premio de quienes ya ganaron. Es
+    pública: solo lleva el id, el nombre y el apellido (ni DNI ni email)."""
     with bd.conexion() as con:
         orden = request.args.get("orden") or bd.leer_config(con, "orden", "apellido")
         if orden not in ORDENES:
             raise ErrorApi(f"Orden inválido: {orden}", 400)
         filas = con.execute(
-            select(participantes.c.id, participantes.c.nombre, participantes.c.apellido, ganadores.c.premio)
-            .select_from(participantes.outerjoin(ganadores, ganadores.c.participante_id == participantes.c.id))
+            select(estudiantes.c.id, estudiantes.c.nombre, estudiantes.c.apellido, premios.c.nombre.label("premio"))
+            .select_from(
+                estudiantes.outerjoin(ganadores, ganadores.c.id_estudiante == estudiantes.c.id)
+                .outerjoin(premios, premios.c.id == ganadores.c.id_premio)
+            )
+            .where(bd.INSCRIPTO)
         ).mappings().all()
 
     lista = [
@@ -479,15 +475,31 @@ def cambiar_orden():
 @app.get("/api/premios")
 @requiere_admin
 def listar_premios():
-    """Premios, con cuántas veces se entregó cada uno."""
+    """Premios y, si ya se entregó, a quién."""
     with bd.conexion() as con:
         filas = con.execute(
-            select(premios.c.id, premios.c.nombre, func.count(ganadores.c.id).label("entregados"))
-            .select_from(premios.outerjoin(ganadores, ganadores.c.premio_id == premios.c.id))
-            .group_by(premios.c.id, premios.c.nombre)
+            select(
+                premios.c.id,
+                premios.c.nombre,
+                ganadores.c.id_estudiante,
+                estudiantes.c.nombre.label("ganador_nombre"),
+                estudiantes.c.apellido.label("ganador_apellido"),
+            )
+            .select_from(
+                premios.outerjoin(ganadores, ganadores.c.id_premio == premios.c.id)
+                .outerjoin(estudiantes, estudiantes.c.id == ganadores.c.id_estudiante)
+            )
             .order_by(premios.c.id)
         ).mappings().all()
-    return jsonify(premios=[dict(f) for f in filas])
+    return jsonify(premios=[
+        {
+            "id": f["id"],
+            "nombre": f["nombre"],
+            "entregado": f["id_estudiante"] is not None,
+            "ganador": f"{f['ganador_apellido']}, {f['ganador_nombre']}" if f["id_estudiante"] is not None else None,
+        }
+        for f in filas
+    ])
 
 
 @app.get("/api/ganadores")
@@ -496,8 +508,17 @@ def listar_ganadores():
     """Ganadores en el orden en que salieron, con el premio de cada uno."""
     with bd.conexion() as con:
         filas = con.execute(
-            select(participantes.c.id, participantes.c.nombre, participantes.c.apellido, ganadores.c.premio, ganadores.c.fecha)
-            .select_from(ganadores.join(participantes, participantes.c.id == ganadores.c.participante_id))
+            select(
+                estudiantes.c.id,
+                estudiantes.c.nombre,
+                estudiantes.c.apellido,
+                premios.c.nombre.label("premio"),
+                ganadores.c.fecha,
+            )
+            .select_from(
+                ganadores.join(estudiantes, estudiantes.c.id == ganadores.c.id_estudiante)
+                .join(premios, premios.c.id == ganadores.c.id_premio)
+            )
             .order_by(ganadores.c.id)
         ).mappings().all()
     return jsonify(ganadores=[{**f, "fecha": f["fecha"].strftime("%Y-%m-%d %H:%M:%S")} for f in filas])
@@ -520,8 +541,9 @@ def agregar_premio():
 @requiere_admin
 def quitar_premio(premio_id):
     with bd.transaccion() as con:
-        # Si ya se entregó, el ganador conserva el nombre del premio (ganadores.premio).
-        con.execute(update(ganadores).where(ganadores.c.premio_id == premio_id).values(premio_id=None))
+        # La base no deja borrar un premio entregado (ganadores.id_premio).
+        if con.execute(select(ganadores.c.id).where(ganadores.c.id_premio == premio_id)).first() is not None:
+            raise ErrorApi("Ese premio ya se entregó: no se puede quitar.")
         if not con.execute(delete(premios).where(premios.c.id == premio_id)).rowcount:
             raise ErrorApi("Ese premio no existe.", 404)
         tocar(con)
@@ -536,6 +558,8 @@ def elegir_premio():
     with bd.transaccion() as con:
         if con.execute(select(premios.c.id).where(premios.c.id == premio_id)).first() is None:
             raise ErrorApi("Ese premio no existe.", 404)
+        if con.execute(select(ganadores.c.id).where(ganadores.c.id_premio == premio_id)).first() is not None:
+            raise ErrorApi("Ese premio ya se entregó.")
         bd.guardar_config(con, "premio_id", premio_id)
         tocar(con)
     olvidar_estado()
@@ -545,7 +569,8 @@ def elegir_premio():
 @app.post("/api/sortear")
 @requiere_admin
 def sortear():
-    """Elige un ganador al azar entre quienes todavía no ganaron.
+    """Elige un ganador al azar entre los inscriptos que todavía no ganaron,
+    para el premio actual (que así queda entregado).
 
     El ganador se decide en el servidor. La pantalla recibe el resultado y
     solo lo anima: la mascota tira de la palanca y el listado gira hasta él.
@@ -564,25 +589,22 @@ def sortear():
             raise ErrorApi("La pantalla del sorteador no está abierta.")
         premio = premio_actual(con)
         if premio is None:
-            raise ErrorApi("No hay premios cargados. Agregá uno para poder sortear.")
+            raise ErrorApi("No quedan premios sin entregar. Agregá uno para poder sortear.")
 
-        ya_ganaron = select(ganadores.c.participante_id)
         candidatos = con.execute(
-            select(participantes.c.id, participantes.c.nombre, participantes.c.apellido)
-            .where(participantes.c.id.not_in(ya_ganaron))
-            .order_by(participantes.c.id)
+            select(estudiantes.c.id, estudiantes.c.nombre, estudiantes.c.apellido)
+            .where(bd.EN_JUEGO)
+            .order_by(estudiantes.c.id)
         ).mappings().all()
         if not candidatos:
             raise ErrorApi("No quedan participantes para sortear.")
 
         elegido = dict(secrets.choice(candidatos))
         con.execute(
-            insert(ganadores).values(
-                participante_id=elegido["id"], premio=premio["nombre"], premio_id=premio["id"], fecha=bd.ahora_local()
-            )
+            insert(ganadores).values(id_estudiante=elegido["id"], id_premio=premio["id"], fecha=bd.ahora_local())
         )
         numero = con.execute(select(tabla_sorteo.c.numero).where(tabla_sorteo.c.id == 1)).scalar_one()
-        ultimo = {"numero": numero, "ganador": elegido, "premio": premio["nombre"]}
+        ultimo = {"numero": numero, "ganador": elegido, "premio": premio["nombre"], "premio_id": premio["id"]}
         con.execute(
             update(tabla_sorteo).where(tabla_sorteo.c.id == 1).values(ultimo=json.dumps(ultimo, ensure_ascii=False))
         )
@@ -608,7 +630,7 @@ def continuar():
 @app.post("/api/reiniciar")
 @requiere_admin
 def reiniciar():
-    """Borra los ganadores para que todos vuelvan al sorteo."""
+    """Borra los ganadores: todos vuelven al sorteo y los premios quedan sin entregar."""
     with bd.transaccion() as con:
         if leer_sorteo(con)["estado"] != "listo":
             raise ErrorApi("Esperá a que termine el sorteo.")
@@ -617,32 +639,6 @@ def reiniciar():
         tocar(con, participantes_cambiaron=True)
     olvidar_estado()
     return jsonify(ok=True)
-
-
-@app.post("/api/participantes/importar")
-@requiere_admin
-def importar_participantes():
-    """Carga participantes desde una planilla (.csv o .xlsx).
-    modo=agregar (por defecto) o modo=reemplazar (borra los anteriores y los ganadores)."""
-    archivo = request.files.get("archivo")
-    if archivo is None or not archivo.filename:
-        raise ErrorApi("Elegí el archivo con los participantes.", 400)
-    reemplazar = request.form.get("modo") == "reemplazar"
-    try:
-        filas = leer_participantes(archivo.filename, archivo.read())
-    except ErrorImportacion as exc:
-        raise ErrorApi(str(exc), 400) from exc
-
-    with bd.transaccion() as con:
-        if leer_sorteo(con)["estado"] != "listo":
-            raise ErrorApi("Esperá a que termine el sorteo.")
-        resultado = bd.importar_participantes(con, filas, reemplazar=reemplazar)
-        if reemplazar:
-            con.execute(update(tabla_sorteo).where(tabla_sorteo.c.id == 1).values(ultimo=None))
-        tocar(con, participantes_cambiaron=True)
-    olvidar_estado()
-    log.info("Participantes importados (%s): %s", "reemplazo" if reemplazar else "agregado", resultado)
-    return jsonify(resultado)
 
 
 # --------------------------------------------------------------------------- #

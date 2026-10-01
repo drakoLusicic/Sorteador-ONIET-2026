@@ -22,9 +22,6 @@
     orden: $('#orden'),
     participantes: $('#participantes'),
     btnReiniciar: $('#btn-reiniciar'),
-    formImportar: $('#form-importar'),
-    archivo: $('#archivo-participantes'),
-    btnImportar: $('#btn-importar'),
     ganadores: $('#lista-ganadores'),
     cantidadGanadores: $('#cantidad-ganadores'),
     toast: $('#toast'),
@@ -100,9 +97,9 @@
     if (e.sorteo === 'ganador') motivo = 'La pantalla muestra al ganador. Tocá Continuar para cerrar esa ventana.';
     else if (e.sorteo === 'sorteando') motivo = e.pantallas ? '' : 'Se cerró la pantalla durante el sorteo. Tocá Continuar.';
     else if (!e.pantallas) motivo = 'Abrí la pantalla del sorteador para poder sortear.';
-    else if (!e.participantes) motivo = 'No hay participantes cargados: cargalos abajo, en «Cargar participantes».';
+    else if (!e.participantes) motivo = 'Todavía no hay estudiantes inscriptos.';
     else if (!e.en_juego) motivo = 'No quedan participantes en juego.';
-    else if (!e.premio) motivo = 'No hay premios cargados: agregá uno abajo.';
+    else if (!e.premio) motivo = 'No quedan premios sin entregar: agregá uno abajo.';
     el.motivo.textContent = motivo;
 
     el.btnSortear.disabled = !(listo && e.pantallas && e.en_juego && e.premio);
@@ -110,19 +107,21 @@
 
     el.orden.value = e.orden;
     el.orden.disabled = !listo;
-    el.participantes.textContent = `${e.participantes} participantes · ${e.en_juego} en juego`;
+    el.participantes.textContent = `${e.participantes} inscriptos · ${e.en_juego} en juego`;
     el.btnReiniciar.disabled = !(listo && e.ganadores);
-    el.btnImportar.disabled = !listo;
   }
 
   function dibujarPremios() {
     const actual = estado && estado.premio ? estado.premio.id : null;
+    // Mientras gira, el administrador tampoco ve a quién se entregó.
+    const sorteando = estado && estado.sorteo === 'sorteando' ? estado.ultimo.premio_id : null;
 
     el.premios.replaceChildren(
       ...premios.map((p) => {
         const item = document.createElement('li');
         item.className = 'premio';
         item.classList.toggle('actual', p.id === actual);
+        item.classList.toggle('entregado', p.entregado);
 
         const etiqueta = document.createElement('label');
         const radio = document.createElement('input');
@@ -130,6 +129,7 @@
         radio.name = 'premio-actual';
         radio.value = p.id;
         radio.checked = p.id === actual;
+        radio.disabled = p.entregado;
         const nombre = document.createElement('span');
         nombre.className = 'premio-nombre';
         nombre.textContent = p.nombre;
@@ -137,8 +137,9 @@
 
         const detalle = document.createElement('span');
         detalle.className = 'premio-detalle';
-        const entregados = p.entregados ? `${p.entregados} ${p.entregados === 1 ? 'entregado' : 'entregados'}` : '';
-        detalle.textContent = [p.id === actual ? 'Próximo' : '', entregados].filter(Boolean).join(' · ');
+        if (p.id === sorteando) detalle.textContent = 'Sorteando…';
+        else if (p.entregado) detalle.textContent = `Entregado a ${p.ganador}`;
+        else if (p.id === actual) detalle.textContent = 'Próximo';
 
         const quitar = document.createElement('button');
         quitar.type = 'button';
@@ -147,6 +148,7 @@
         quitar.textContent = '✕';
         quitar.title = 'Quitar premio';
         quitar.setAttribute('aria-label', `Quitar ${p.nombre}`);
+        quitar.disabled = p.entregado; // la base no deja borrar un premio entregado
 
         item.append(etiqueta, detalle, quitar);
         return item;
@@ -199,7 +201,7 @@
     dibujarGanadores();
   }
 
-  /** Premios (con cuántas veces se entregó cada uno) y ganadores. */
+  /** Premios (y a quién se entregó cada uno) y ganadores. */
   async function cargarListas() {
     const [datosPremios, datosGanadores] = await Promise.all([pedir('/api/premios'), pedir('/api/ganadores')]);
     if (datosPremios) {
@@ -258,24 +260,8 @@
   el.orden.addEventListener('change', () => enviar('PUT', '/api/orden', { orden: el.orden.value }));
 
   el.btnReiniciar.addEventListener('click', async () => {
-    if (!confirm('¿Reiniciar los ganadores? Se borra la lista de ganadores y todos los participantes vuelven a entrar en juego.')) return;
+    if (!confirm('¿Reiniciar los ganadores? Se borra la lista de ganadores: todos los participantes vuelven a entrar en juego y los premios quedan sin entregar.')) return;
     if (await enviar('POST', '/api/reiniciar')) mostrarToast('Ganadores reiniciados.');
-  });
-
-  el.formImportar.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const datos = new FormData(el.formImportar);
-    if (datos.get('modo') === 'reemplazar' &&
-        !confirm('¿Reemplazar todos los participantes? Se borran los que están cargados y también la lista de ganadores.')) return;
-    el.btnImportar.disabled = true;
-    const r = await pedir('/api/participantes/importar', { method: 'POST', body: datos });
-    el.btnImportar.disabled = false;
-    if (!r) return;
-    const partes = [];
-    if (r.agregados) partes.push(`${r.agregados} ${r.agregados === 1 ? 'agregado' : 'agregados'}`);
-    if (r.actualizados) partes.push(`${r.actualizados} ${r.actualizados === 1 ? 'actualizado' : 'actualizados'}`);
-    mostrarToast(`Participantes cargados: ${partes.join(', ') || 'sin cambios'}. Total: ${r.total}.`);
-    el.formImportar.reset();
   });
 
   // ------------------------------------------------------------------ //
