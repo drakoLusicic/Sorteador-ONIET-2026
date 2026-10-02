@@ -203,6 +203,8 @@ body {
    --y-pomo        y del pomo (arriba, en reposo)
    --r-pomo        radio del pomo
    --izq-mascota, --ancho-mascota, --alto-mascota
+   --boton         diámetro del botón Sortear (0 si no se muestra)
+   --x-boton       borde izquierdo del botón Sortear
    --arriba        margen superior para centrar todo en vertical */
 .escenario {
   position: relative;
@@ -458,16 +460,6 @@ body {
   display: none;
 }
 
-.maquina-pie {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 16px;
-  border-top: 1px solid var(--panel-borde);
-  font-size: 0.8rem;
-  color: var(--texto-suave);
-}
-
 /* Palanca (al costado derecho de la máquina; la mueve la mascota) */
 .palanca {
   display: contents;
@@ -524,6 +516,145 @@ body {
   box-shadow:
     0 0 0 3px var(--oscuro),
     0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* ------------------------------------------------------------------ */
+/* Botón Sortear: un botón de arcade a la izquierda de la máquina     */
+/* ------------------------------------------------------------------ */
+/* Solo aparece en el navegador donde se entró al administrador (app.js
+   marca el escenario con .con-sortear y le hace lugar). Las medidas van en
+   em: 1em es la décima parte del diámetro (en la tapa, un 10% más, porque
+   su letra es más grande). */
+.btn-sortear {
+  position: absolute;
+  left: var(--x-boton);
+  top: calc((var(--s) - var(--boton)) / 2);
+  width: var(--boton);
+  height: var(--boton);
+  display: none;
+  padding: 0;
+  font: inherit;
+  font-size: calc(var(--boton) / 10);
+  color: #ffffff;
+  border: 0;
+  border-radius: 50%;
+  /* Carcasa con el mismo marco que la máquina */
+  background: linear-gradient(160deg, #ffc08f 0%, var(--naranja) 22%, var(--magenta) 62%, var(--violeta) 100%);
+  box-shadow:
+    0 0 0 3px var(--oscuro),
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    0 0 90px rgba(229, 25, 138, 0.28);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.2s;
+}
+
+.escenario.con-sortear .btn-sortear {
+  display: block;
+}
+
+/* Aro de luces (giran mientras dura el sorteo, como corren las de la máquina) */
+.btn-sortear::before {
+  content: '';
+  position: absolute;
+  inset: 0.28em;
+  border-radius: 50%;
+  border: 0.2em dotted #fffaf3;
+  opacity: 0.85;
+}
+
+/* Hueco oscuro donde se hunde la tapa */
+.btn-sortear::after {
+  content: '';
+  position: absolute;
+  inset: 0.75em;
+  border-radius: 50%;
+  background: #0e0b0d;
+  box-shadow:
+    0 0 0 0.12em rgba(26, 7, 20, 0.9),
+    inset 0 0.4em 1em rgba(0, 0, 0, 0.85);
+}
+
+/* Tapa: sobresale del hueco (su costado oscuro es la sombra sólida de abajo)
+   y al presionarla baja hasta quedar al ras. */
+.btn-sortear-tapa {
+  position: absolute;
+  z-index: 1;
+  inset: 1.4em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.1em;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 0 0.08em 0 rgba(0, 0, 0, 0.35);
+  background: radial-gradient(circle at 50% 30%, #ffb3d9 0%, var(--rosa) 22%, var(--magenta) 55%, #9d0a5c 100%);
+  box-shadow:
+    0 0.4em 0 #6d0540,
+    0 0.7em 0.9em rgba(0, 0, 0, 0.55),
+    inset 0 -0.3em 0.5em rgba(0, 0, 0, 0.25),
+    inset 0 0.2em 0.3em rgba(255, 255, 255, 0.35);
+  transform: translateY(-0.4em);
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, filter 0.2s;
+}
+
+/* Brillo de la tapa */
+.btn-sortear-tapa::before {
+  content: '';
+  position: absolute;
+  top: 7%;
+  left: 22%;
+  right: 22%;
+  height: 34%;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.btn-sortear:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 3px var(--oscuro),
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    0 0 110px rgba(255, 79, 168, 0.55);
+}
+
+.btn-sortear:hover:not(:disabled) .btn-sortear-tapa {
+  filter: brightness(1.1);
+}
+
+.btn-sortear:focus-visible {
+  outline: 4px solid var(--rosa);
+  outline-offset: 6px;
+}
+
+/* Presionado: mientras se mantiene apretado y, después, durante todo el
+   sorteo (app.js le pone .presionado), hasta que se puede volver a sortear. */
+.btn-sortear:active:not(:disabled) .btn-sortear-tapa,
+.btn-sortear.presionado .btn-sortear-tapa {
+  transform: translateY(0);
+  box-shadow:
+    0 0.06em 0 #6d0540,
+    0 0.15em 0.3em rgba(0, 0, 0, 0.55),
+    inset 0 -0.2em 0.4em rgba(0, 0, 0, 0.3),
+    inset 0 0.2em 0.3em rgba(255, 255, 255, 0.25);
+}
+
+.btn-sortear.presionado::before {
+  animation: girar 3s linear infinite;
+}
+
+/* Sin premio, sin participantes en juego o sin conexión (el motivo va en el title). */
+.btn-sortear:disabled {
+  cursor: not-allowed;
+}
+
+.btn-sortear:disabled:not(.presionado) .btn-sortear-tapa {
+  filter: grayscale(0.8) brightness(0.65);
+}
+
+.btn-sortear:disabled:not(.presionado)::before {
+  opacity: 0.3;
 }
 
 /* ------------------------------------------------------------------ */
@@ -986,7 +1117,8 @@ body {
   .luces,
   .modal-rayos,
   .modal-mascota,
-  .mascota-respira {
+  .mascota-respira,
+  .btn-sortear.presionado::before {
     animation: none;
   }
 }
@@ -999,10 +1131,9 @@ body {
    de la Universidad abajo. app.js reparte el ancho entre la máquina y la
    mascota y marca la máquina como .angosto cuando queda estrecha. */
 
-/* Máquina angosta: cabecera y pie más compactos, y el ID más chico para
-   dejarle lugar al nombre. */
-.escenario.angosto .maquina-cabecera,
-.escenario.angosto .maquina-pie {
+/* Máquina angosta: cabecera más compacta y el ID más chico para dejarle
+   lugar al nombre. */
+.escenario.angosto .maquina-cabecera {
   padding: 6px 8px;
 }
 
@@ -1013,10 +1144,6 @@ body {
 
 .escenario.angosto .contador {
   padding: 1px 9px;
-}
-
-.escenario.angosto .maquina-pie {
-  font-size: 0.72rem;
 }
 
 .escenario.angosto .fila {
@@ -1162,8 +1289,7 @@ body {
     font-size: 0.95rem;
   }
 
-  .maquina-cabecera,
-  .maquina-pie {
+  .maquina-cabecera {
     padding: 4px 10px;
   }
 

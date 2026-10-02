@@ -2,12 +2,12 @@
 
 Sirve dos ventanas: la pantalla del sorteador (`/`), que se proyecta al
 público, y el administrador (`/admin`, con usuario y contraseña), desde
-donde se sortea, se ordena el listado y se manejan los premios. Los
-participantes son los estudiantes inscriptos (tabla estudiantes,
-inscripto = 1) y los usuarios del administrador están en la tabla
-administradores. La pantalla no tiene controles del sorteo: solo el botón
-de la llave, que pide usuario y contraseña y abre el administrador en otra
-ventana.
+donde se ordena el listado, se manejan los premios y se cierra la ventana
+del ganador. Los participantes son los estudiantes inscriptos (tabla
+estudiantes, inscripto = 1) y los usuarios del administrador están en la
+tabla administradores. La pantalla tiene el botón de la llave, que pide
+usuario y contraseña y abre el administrador en otra ventana, y el botón
+Sortear, que aparece solo en el navegador donde se entró al administrador.
 
 Las ventanas consultan el estado cada segundo (`/api/estado`). El estado del
 sorteo se guarda en la base de datos y no en memoria: en el hosting
@@ -405,12 +405,18 @@ def salud():
 @app.get("/api/estado")
 def ver_estado():
     """Lo consultan las ventanas cada segundo. Las pantallas agregan
-    `latido=1` cada pocos segundos para avisar que siguen abiertas."""
+    `latido=1` cada pocos segundos para avisar que siguen abiertas, y
+    reciben `admin`: si en ese navegador se entró al administrador (ahí
+    muestran el botón Sortear)."""
     cliente = request.args.get("cliente", "")
-    if request.args.get("rol") == "pantalla" and request.args.get("latido") and CLIENTE_VALIDO.fullmatch(cliente):
+    es_pantalla = request.args.get("rol") == "pantalla"
+    if es_pantalla and request.args.get("latido") and CLIENTE_VALIDO.fullmatch(cliente):
         if registrar_pantalla(cliente):
             olvidar_estado()  # el administrador ve enseguida que se abrió
-    resp = jsonify(estado_actual())
+    datos = estado_actual()
+    if es_pantalla:
+        datos = {**datos, "admin": es_admin()}  # copia: el estado guardado es compartido
+    resp = jsonify(datos)
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
@@ -604,6 +610,9 @@ def sortear():
 
     El ganador se decide en el servidor. La pantalla recibe el resultado y
     solo lo anima: la mascota tira de la palanca y el listado gira hasta él.
+    Lo pide el botón Sortear de la pantalla, que recibe el resultado en la
+    respuesta y lo anima enseguida; las demás pantallas se enteran al
+    consultar el estado.
     Todo pasa en una transacción: si dos pedidos llegan juntos, la base deja
     pasar a uno solo (el otro encuentra el sorteo ya en curso).
     """
@@ -639,7 +648,7 @@ def sortear():
             update(tabla_sorteo).where(tabla_sorteo.c.id == 1).values(ultimo=json.dumps(ultimo, ensure_ascii=False))
         )
     olvidar_estado()
-    return jsonify(ok=True)
+    return jsonify(ok=True, ultimo=ultimo)
 
 
 @app.post("/api/continuar")

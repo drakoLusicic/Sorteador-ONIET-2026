@@ -43,7 +43,7 @@ En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a t
 8. **Comprobar.** Abrir `https://midominio.com/salud`: tiene que responder `"ok": true`, `"base": "mysql"` y en `"participantes"` la cantidad de estudiantes inscriptos. Si dice que no hay conexión, revisar los datos de la base en el `.env`; el detalle del error queda en el archivo `stderr.log` de la carpeta de la aplicación (o en *Errores* de cPanel).
 9. **Revisar los datos.** Los estudiantes y los premios salen de la base. Desde el administrador (🔑 en la pantalla, o `https://midominio.com/admin`) se ve cuántos inscriptos hay y se pueden agregar premios.
 
-El día del evento: abrir la pantalla (`https://midominio.com/`) en la computadora del proyector, ponerla en pantalla completa con F11 y **hacerle un clic** para que el navegador deje reproducir el sonido. El administrador se puede manejar desde otra computadora o desde un celular.
+El día del evento: abrir la pantalla (`https://midominio.com/`) en la computadora del proyector, **entrar con la llave 🔑** (así aparece el botón *Sortear* a la izquierda del listado), ponerla en pantalla completa con F11 y **hacerle un clic** para que el navegador deje reproducir el sonido. El resto del administrador (premios, Continuar) se puede manejar desde otra computadora o desde un celular.
 
 ### Cómo funciona en el hosting
 
@@ -81,31 +81,31 @@ Sin `SORTEADOR_DB_NOMBRE` ni `SORTEADOR_DB_URL`, usa SQLite (`sorteador.db`) con
 Participan los estudiantes **inscriptos**: las filas de la tabla `estudiantes` con `inscripto = 1`. Los marca el formulario de inscripción (o se pueden marcar a mano en phpMyAdmin). El sorteador no modifica esa tabla: solo la lee.
 
 - La pantalla muestra el id, el nombre y el apellido de cada inscripto que todavía no ganó.
-- Cuando alguien se inscribe, la pantalla lo suma sola (nota que cambió la cantidad de inscriptos). Si solo se corrigió un nombre, hay que recargarla (F5).
+- Cuando alguien se inscribe, la pantalla lo suma sola (nota que cambió la cantidad de inscriptos) y el listado se desliza hasta dejarlo en el centro. Si solo se corrigió un nombre, hay que recargarla (F5).
 - El sorteo se hace entre los inscriptos que todavía no ganaron. Quien se inscribe durante un giro entra desde el sorteo siguiente.
 
 ## Uso
 
 ### Administrador
 
-- **Sortear**: la mascota tira de la palanca en la pantalla y el listado gira. Solo se puede sortear si la pantalla está abierta, queda algún inscripto en juego y queda algún premio sin entregar; si no, abajo del botón dice qué falta.
 - **Continuar**: cierra la ventana del ganador en la pantalla (también se cierra con Escape en la pantalla, si se abrió en el mismo navegador donde se inició sesión en el administrador).
 - **Premios**: el marcado es el que se sortea a continuación y aparece en la pantalla como "Próximo premio". **Cada premio se entrega una sola vez**: después del sorteo queda tachado, con el nombre de quien lo ganó, y pasa solo al primero de la lista que falta entregar. Se pueden agregar premios y quitar los que todavía no se entregaron.
 - **Ordenar por**: ordena el listado de la pantalla por apellido o por ID de participante.
 - **Reiniciar ganadores**: borra la lista de ganadores (tabla `ganadores`): todos los inscriptos vuelven a entrar en juego y los premios quedan sin entregar.
 - **Ganadores** (columna de la derecha): cada ganador con su premio y la hora, el más reciente arriba y numerados en el orden en que salieron. El ganador aparece recién cuando la pantalla lo muestra.
 
-Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlace para abrirla. El botón *Salir* cierra la sesión.
+Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlace para abrirla. En la sección *Sorteo* dice qué falta para poder sortear. El botón *Salir* cierra la sesión.
 
 ### Pantalla
 
+- **Sortear** (el botón redondo a la izquierda del listado): la mascota tira de la palanca y el listado gira. Es un botón de arcade que se hunde al apretarlo y queda hundido, con su aro de luces girando, hasta que termina el sorteo. Aparece solo en el navegador donde se entró con la llave 🔑 (el público que mira la pantalla desde otro lado no lo ve, y para ellos el listado sigue centrado). Está apagado si no queda algún inscripto en juego o algún premio sin entregar; al pasarle el mouse dice qué falta.
 - **El listado de participantes es el tragamonedas.** La fila que queda sobre la línea del medio es la ganadora. Mientras no gira, se puede recorrer con la rueda del mouse, arrastrando o con las flechas del teclado.
 - Cuando el listado se detiene, aparece una ventana con el ganador hasta que el administrador toca Continuar.
-- **No se puede ganar dos veces**: cuando el administrador toca Continuar, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron). Abajo del listado se cuenta cuántos ya ganaron.
+- **No se puede ganar dos veces**: cuando el administrador toca Continuar, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron).
 - En cada sorteo el listado da al menos 3 vueltas completas, por más participantes que haya. Con cientos, el tramo rápido se ve borroso, como un tambor girando.
 - 🔊 (arriba a la derecha) activa o desactiva el sonido.
 - 🔑 (abajo del sonido) pide usuario y contraseña y, si son correctos, abre el administrador en otra ventana. Si el navegador bloquea la ventana nueva, en el mismo panel aparece un enlace para abrirla.
-- **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con la palanca y la mascota a su derecha, y el logo de la Universidad abajo. Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 64% (`PARTE_MAQUINA`) y la mascota y la palanca se achican juntas, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
+- **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con el botón *Sortear* a su izquierda (si se muestra) y la palanca y la mascota a su derecha, y el logo de la Universidad abajo. El botón mide el 80% del ancho de la máquina (`BOTON` en `app.js`). Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 64% (`PARTE_MAQUINA`; 60% con el botón) y la mascota, la palanca y el botón se achican juntos, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
 
 ## Mascota y palanca
 
@@ -174,7 +174,7 @@ herramientas/           Scripts que recortan las poses y los logos
 
 El servidor es quien manda: guarda el premio, el orden y el estado del sorteo en la base, y las ventanas lo consultan cada segundo (`/api/estado`). El administrador no le habla a la pantalla directamente:
 
-1. **Sortear** elige al ganador en el servidor y lo registra. El sorteo pasa a `sorteando` (y sube su número); cada pantalla, al verlo, anima el sorteo hasta ese ganador.
+1. **Sortear** (el botón de la pantalla) elige al ganador en el servidor y lo registra. El sorteo pasa a `sorteando` (y sube su número); la pantalla que lo pidió lo anima enseguida y las demás, al verlo, animan el sorteo hasta ese ganador.
 2. Cuando el listado se detiene, la pantalla avisa (`/api/revelado`, con el número del sorteo) y el sorteo pasa a `ganador`; recién ahí el administrador ve quién ganó.
 3. **Continuar** lo vuelve a `listo` y las pantallas cierran la ventana del ganador.
 

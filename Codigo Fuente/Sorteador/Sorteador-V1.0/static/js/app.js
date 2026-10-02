@@ -1,11 +1,13 @@
 /**
- * Pantalla del sorteador (la que se proyecta al público). No tiene
- * controles: el sorteo, el premio y el orden del listado se manejan desde el
- * administrador (/admin), que se abre con el botón de la llave, el usuario
- * y la contraseña. La pantalla escucha los avisos del servidor y anima
- * lo que corresponde: la mascota tira de la palanca, el listado gira como un
- * tragamonedas y aparece la ventana del ganador hasta que el administrador
- * toca Continuar.
+ * Pantalla del sorteador (la que se proyecta al público). El único control
+ * del sorteo es el botón Sortear, a la izquierda del listado, que aparece solo en
+ * el navegador donde se entró al administrador (con el botón de la llave, el
+ * usuario y la contraseña). El premio y el orden del listado se manejan desde
+ * el administrador (/admin). La pantalla escucha los avisos del servidor y
+ * anima lo que corresponde: la mascota tira de la palanca, el listado gira
+ * como un tragamonedas y aparece la ventana del ganador hasta que el
+ * administrador toca Continuar. Cuando alguien se inscribe, el listado se
+ * desliza hasta dejarlo en el centro.
  */
 (function () {
   'use strict';
@@ -18,7 +20,7 @@
     maquina: $('.maquina'),
     carrete: $('#carrete'),
     contador: $('#contador'),
-    ganadores: $('#ganadores'),
+    btnSortear: $('#btn-sortear'),
     subtitulo: $('#subtitulo'),
     premio: $('#premio'),
     btnSonido: $('#btn-sonido'),
@@ -41,8 +43,11 @@
 
   const estado = {
     participantes: [],
+    conocidos: null,  // ids de los inscriptos que ya se mostraron (para notar quién se suma)
     orden: null,      // orden del listado elegido en el administrador
     girando: false,   // desde que arranca un sorteo hasta que se cierra la ventana del ganador
+    pidiendo: false,  // se tocó Sortear y el servidor todavía no respondió
+    conBoton: false,  // se muestra el botón Sortear (en este navegador se entró al administrador)
     compacto: false,
     servidor: null,   // último estado recibido del servidor
     conectada: true,
@@ -107,51 +112,62 @@
   // separación hasta la palanca más la mascota desde el pomo hacia la derecha.
   const DERECHA_POR_ALTO = PALANCA.separacion + MASCOTA.proporcion * (1 - MASCOTA.manoX);
 
+  // Botón Sortear, a la izquierda de la máquina: diámetro en anchos de
+  // máquina (sin pasar el 80% de su alto) y separación en diámetros.
+  const BOTON = { tamano: 0.8, separacion: 0.06 };
+
   const LADO = 16;             // margen a los costados
   const PARTE_MAQUINA = 0.64;  // parte del ancho que se queda la máquina cuando no entra todo
-  const MASCOTA_MINIMA = 70;   // px; con menos, se muestra solo la máquina
+  const PARTE_MAQUINA_CON_BOTON = 0.6;
+  const MASCOTA_MINIMA = 70;   // px; con menos, no se muestra la mascota
 
   /**
-   * Calcula el tamaño de la máquina y de la mascota para un escenario de
-   * `ancho` x `alto` px. La máquina usa todo el alto. Si a lo ancho no entra
-   * todo, la máquina se angosta y la mascota se achica (repartiendo el
-   * ancho), pero se mantiene el orden: listado, palanca y mascota.
+   * Calcula el tamaño de la máquina, de la mascota y del botón Sortear (si
+   * `conBoton`) para un escenario de `ancho` x `alto` px. La máquina usa todo
+   * el alto. Si a lo ancho no entra todo, la máquina se angosta y la mascota
+   * y el botón se achican juntos (repartiendo el ancho), pero se mantiene el
+   * orden: botón, listado, palanca y mascota. Sin `conMascota` quedan solo el
+   * botón y el listado.
    */
-  function geometria(ancho, alto) {
+  function geometria(ancho, alto, conBoton, conMascota = true) {
     const margen = alto < 420 ? 8 : 16; // arriba y abajo
     const s = Math.max(200, alto - margen * 2);
     const disponible = ancho - LADO * 2;
 
     let anchoMaquina = Math.min(640, Math.max(340, s * 0.95));
-    let altoMascota = s * 0.86;
-    if (anchoMaquina + altoMascota * DERECHA_POR_ALTO > disponible) {
-      anchoMaquina = Math.min(
-        anchoMaquina,
-        Math.max(disponible * PARTE_MAQUINA, disponible - altoMascota * DERECHA_POR_ALTO),
-      );
-      altoMascota = Math.min(altoMascota, (disponible - anchoMaquina) / DERECHA_POR_ALTO);
+    let altoMascota = conMascota ? s * 0.86 : 0;
+    let boton = conBoton ? Math.min(anchoMaquina * BOTON.tamano, s * 0.8) : 0;
+    // Ancho que ocupan, a los costados de la máquina, la mascota y el botón.
+    const costados = () => altoMascota * DERECHA_POR_ALTO + boton * (1 + BOTON.separacion);
+    if (anchoMaquina + costados() > disponible) {
+      const parte = conBoton ? PARTE_MAQUINA_CON_BOTON : PARTE_MAQUINA;
+      anchoMaquina = Math.min(anchoMaquina, Math.max(disponible * parte, disponible - costados()));
+      const lados = costados();
+      const achique = lados ? Math.min(1, (disponible - anchoMaquina) / lados) : 1;
+      altoMascota *= achique;
+      boton *= achique;
     }
 
+    const izquierda = anchoMaquina / 2 + boton * (1 + BOTON.separacion);
     const derecha = anchoMaquina / 2 + altoMascota * DERECHA_POR_ALTO;
-    const centro = Math.min(ancho / 2, ancho - LADO - derecha);
-    return { s, anchoMaquina, altoMascota, centro, arriba: Math.max(0, (alto - s) / 2) };
+    // La máquina va en el centro de la pantalla; si de un lado no entra, se corre lo justo.
+    const centro = Math.min(Math.max(ancho / 2, LADO + izquierda), ancho - LADO - derecha);
+    return { s, anchoMaquina, altoMascota, boton, centro, arriba: Math.max(0, (alto - s) / 2) };
   }
 
   /**
-   * Ubica la máquina en el centro y la palanca y la mascota a su derecha.
-   * Solo si la pantalla es tan chica que la mascota quedaría diminuta, se
-   * muestra la máquina sola.
+   * Ubica la máquina en el centro, el botón Sortear (si se muestra) a su
+   * izquierda y la palanca y la mascota a su derecha. Solo si la pantalla es
+   * tan chica que la mascota quedaría diminuta, no se muestra la mascota.
    */
   function distribuir() {
     const ancho = el.escenario.clientWidth;
     const alto = el.escenario.clientHeight;
     if (!ancho || !alto) return;
 
-    let g = geometria(ancho, alto);
+    let g = geometria(ancho, alto, estado.conBoton);
     estado.compacto = g.altoMascota < MASCOTA_MINIMA;
-    if (estado.compacto) {
-      g = { ...g, anchoMaquina: Math.min(640, ancho - LADO * 2), centro: ancho / 2 };
-    }
+    if (estado.compacto) g = geometria(ancho, alto, estado.conBoton, false);
 
     const m = g.altoMascota;
     const anchoMascota = m * MASCOTA.proporcion;
@@ -167,6 +183,8 @@
       '--alto-mascota': m,
       '--ancho-mascota': anchoMascota,
       '--izq-mascota': xPalanca - MASCOTA.manoX * anchoMascota,
+      '--boton': g.boton,
+      '--x-boton': g.centro - g.anchoMaquina / 2 - g.boton * (1 + BOTON.separacion),
       '--arriba': g.arriba,
     };
     for (const [nombre, valor] of Object.entries(medidas)) {
@@ -192,23 +210,37 @@
   /** Solo quienes todavía no ganaron (no se puede ganar dos veces). */
   const enJuego = () => estado.participantes.filter((p) => !p.ganador);
 
-  function actualizarContadores() {
-    const quedan = enJuego().length;
-    const ganadores = estado.participantes.length - quedan;
-    el.contador.textContent = quedan;
-    el.ganadores.textContent =
-      ganadores === 0 ? 'Todavía no hay ganadores' : `${ganadores} ${ganadores === 1 ? 'ya ganó' : 'ya ganaron'}`;
+  /**
+   * Quien se sumó desde la última vez que se mostró el listado (si en ese
+   * rato se sumaron varios, el de ID más alto), o null. La primera vez no hay
+   * con qué comparar.
+   */
+  function ultimoInscripto() {
+    const anteriores = estado.conocidos;
+    estado.conocidos = new Set(estado.participantes.map((p) => p.id));
+    if (!anteriores) return null;
+    let ultimo = null;
+    for (const p of estado.participantes) {
+      if (!p.ganador && !anteriores.has(p.id) && (!ultimo || p.id > ultimo.id)) ultimo = p;
+    }
+    return ultimo;
+  }
+
+  /** Pasa el listado al carrete y, si alguien se acaba de inscribir, lo deja en el centro. */
+  function mostrarParticipantes() {
+    const nuevo = ultimoInscripto();
+    carrete.setParticipantes(enJuego());
+    if (nuevo) carrete.centrarEn(nuevo.id);
+    el.contador.textContent = enJuego().length;
   }
 
   async function cargarParticipantes() {
     const orden = encodeURIComponent(estado.orden || 'apellido');
     const datos = await api(`/api/participantes?orden=${orden}`);
     estado.participantes = datos.participantes;
-    // Durante el sorteo el listado no se toca: el ganador saldría antes de tiempo.
-    if (!estado.girando) {
-      carrete.setParticipantes(enJuego());
-      actualizarContadores();
-    }
+    // Durante el sorteo el listado no se toca: el ganador saldría antes de
+    // tiempo. Quien se inscriba mientras tanto se muestra al terminar.
+    if (!estado.girando) mostrarParticipantes();
   }
 
   function recargarParticipantes() {
@@ -237,6 +269,7 @@
 
   function recibirEstado(e) {
     estado.servidor = e;
+    actualizarBotonSortear();
     if (estado.girando) {
       // Durante el sorteo solo importa que el administrador cierre la ventana del ganador.
       if (e.sorteo === 'listo' && !el.modal.hidden) cerrarModal();
@@ -257,7 +290,61 @@
   function bloquear(bloqueado) {
     estado.girando = bloqueado;
     el.escenario.classList.toggle('girando', bloqueado);
+    actualizarBotonSortear();
   }
+
+  /** Por qué no se puede sortear ahora, o '' si se puede. */
+  function motivoSinSorteo() {
+    const e = estado.servidor;
+    if (!estado.conectada || !e) return 'Sin conexión con el servidor.';
+    if (estado.girando || estado.pidiendo || e.sorteo !== 'listo') return 'Hay un sorteo en curso.';
+    if (!e.participantes) return 'Todavía no hay estudiantes inscriptos.';
+    if (!e.en_juego) return 'No quedan participantes en juego.';
+    if (!e.premio) return 'No quedan premios sin entregar: agregá uno desde el administrador.';
+    return '';
+  }
+
+  /**
+   * El botón Sortear se muestra solo si en este navegador se entró al
+   * administrador (el servidor lo indica en el estado): el público que mira
+   * la pantalla desde otro lado no lo ve, y la pantalla no le deja lugar.
+   * Una vez tocado queda hundido hasta que termina el sorteo.
+   */
+  function actualizarBotonSortear() {
+    const e = estado.servidor;
+    const conBoton = Boolean(e && e.admin);
+    if (conBoton !== estado.conBoton) {
+      estado.conBoton = conBoton;
+      el.escenario.classList.toggle('con-sortear', conBoton);
+      distribuir();
+    }
+    const motivo = motivoSinSorteo();
+    el.btnSortear.disabled = Boolean(motivo);
+    el.btnSortear.classList.toggle('presionado', estado.girando || estado.pidiendo);
+    el.btnSortear.title = motivo || `Sortear «${e.premio.nombre}»`;
+  }
+
+  /** Sortear: el servidor elige al ganador y la pantalla lo anima enseguida. */
+  async function pedirSorteo() {
+    estado.pidiendo = true;
+    actualizarBotonSortear();
+    window.Sonido.activar();
+    try {
+      const { ultimo } = await api('/api/sortear', { method: 'POST' });
+      // Sin esperar a la próxima consulta del estado (que, al ver este mismo
+      // sorteo, no lo vuelve a animar).
+      if (ultimo) sortear(ultimo);
+    } catch (err) {
+      mostrarToast(err.message, true);
+    } finally {
+      estado.pidiendo = false;
+      actualizarBotonSortear();
+    }
+  }
+
+  el.btnSortear.addEventListener('click', () => {
+    if (!el.btnSortear.disabled) pedirSorteo();
+  });
 
   /** El servidor ya eligió al ganador: la mascota tira de la palanca y el listado gira hasta él. */
   async function sortear({ ganador, premio, numero }) {
@@ -445,6 +532,7 @@
     (conectada) => {
       if (conectada === estado.conectada) return;
       estado.conectada = conectada;
+      actualizarBotonSortear();
       mostrarToast(conectada ? 'Conexión recuperada.' : 'Se perdió la conexión con el servidor.', !conectada);
     },
   );

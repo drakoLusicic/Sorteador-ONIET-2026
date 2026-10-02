@@ -176,6 +176,22 @@
       return this.items.some((p) => p.id === id);
     }
 
+    /**
+     * Desliza el listado (por el camino más corto, dando la vuelta si hace
+     * falta) hasta dejar al participante `id` en el centro. Mientras gira un
+     * sorteo no hace nada.
+     */
+    centrarEn(id) {
+      const n = this.items.length;
+      const idx = this.items.findIndex((p) => p.id === id);
+      if (idx < 0 || !this._puedeMoverse()) return;
+      const actual = Math.round(this.objetivo);
+      let paso = mod(idx - actual, n);
+      if (paso > n / 2) paso -= n;
+      this.objetivo = actual + paso;
+      this._pedirCuadro();
+    }
+
     quitarResaltado() {
       this.resaltadoId = null;
       this.ventana.classList.remove('resaltado');

@@ -1,8 +1,8 @@
 /**
- * Ventana del administrador: lanza el sorteo, cierra la ventana del ganador,
- * maneja los premios y el orden del listado, y lleva la lista de ganadores.
- * Todo lo que cambia acá lo guarda el servidor y se lo avisa a la pantalla
- * del sorteador.
+ * Ventana del administrador: cierra la ventana del ganador, maneja los
+ * premios y el orden del listado, y lleva la lista de ganadores. El sorteo se
+ * lanza con el botón Sortear de la pantalla. Todo lo que cambia acá lo guarda
+ * el servidor y se lo avisa a la pantalla del sorteador.
  */
 (function () {
   'use strict';
@@ -13,7 +13,6 @@
   const el = {
     conexion: $('#conexion'),
     estadoSorteo: $('#estado-sorteo'),
-    btnSortear: $('#btn-sortear'),
     btnContinuar: $('#btn-continuar'),
     motivo: $('#motivo'),
     premios: $('#premios'),
@@ -102,7 +101,6 @@
     else if (!e.premio) motivo = 'No quedan premios sin entregar: agregá uno abajo.';
     el.motivo.textContent = motivo;
 
-    el.btnSortear.disabled = !(listo && e.pantallas && e.en_juego && e.premio);
     el.btnContinuar.disabled = !(conectado && (e.sorteo === 'ganador' || (e.sorteo === 'sorteando' && !e.pantallas)));
 
     el.orden.value = e.orden;
@@ -217,13 +215,6 @@
   // ------------------------------------------------------------------ //
   // Acciones
   // ------------------------------------------------------------------ //
-  el.btnSortear.addEventListener('click', () => {
-    el.btnSortear.disabled = true; // evita un doble clic; el estado nuevo lo vuelve a dibujar
-    enviar('POST', '/api/sortear').then((ok) => {
-      if (!ok) dibujar();
-    });
-  });
-
   el.btnContinuar.addEventListener('click', () => {
     el.btnContinuar.disabled = true;
     enviar('POST', '/api/continuar').then((ok) => {

@@ -36,6 +36,12 @@
   <main id="escenario" class="escenario">
     <!-- app.js calcula las medidas y las pasa como variables CSS (--s, --centro, ...) -->
     <div id="conjunto" class="conjunto">
+      <!-- A la izquierda de la máquina. Solo aparece en el navegador donde se
+           entró al administrador (con la llave). -->
+      <button id="btn-sortear" class="btn-sortear" type="button" disabled>
+        <span class="btn-sortear-tapa">Sortear</span>
+      </button>
+
       <section class="maquina" aria-label="Listado de participantes">
         <div class="luces arriba" aria-hidden="true"></div>
         <div class="maquina-interior">
@@ -51,11 +57,6 @@
             <div class="linea-premio" aria-hidden="true"></div>
             <div class="carrete-filas"></div>
             <p class="carrete-vacio">No quedan participantes en juego.</p>
-          </div>
-
-          <!-- Quienes ya ganaron salen del listado: acá se cuentan -->
-          <div class="maquina-pie">
-            <span id="ganadores"></span>
           </div>
         </div>
         <div class="luces abajo" aria-hidden="true"></div>
