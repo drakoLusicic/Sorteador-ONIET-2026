@@ -7,9 +7,9 @@ Tablas del evento (en el hosting se crean importando el script de la base
 en phpMyAdmin; en la computadora, las crea el sorteador):
 - estudiantes: participan los que tienen inscripto = 1 (los marca el
   formulario de inscripción). El sorteador solo los lee.
-- premios: cada premio se sortea una sola vez.
-- ganadores: quién ganó qué y cuándo. Nadie puede ganar dos veces y ningún
-  premio se entrega dos veces.
+- premios: los premios que se sortean. Un premio se puede entregar más de
+  una vez (por ejemplo, si hay varias unidades).
+- ganadores: quién ganó qué y cuándo. Nadie puede ganar dos veces.
 - administradores: usuarios que entran al administrador, con el hash de su
   contraseña (en el hosting se crea con administradores.sql).
 
@@ -23,6 +23,7 @@ Tablas propias del sorteador (las crea solo, también en el hosting):
   segundos que sigue ahí).
 """
 
+import logging
 import os
 import secrets
 from contextlib import contextmanager
@@ -57,6 +58,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 import config
+
+log = logging.getLogger("sorteador")
 
 metadata = MetaData()
 _MYSQL = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
@@ -109,7 +112,8 @@ ganadores = Table(
     ),
     Column("fecha", DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     UniqueConstraint("id_estudiante", name="uq_ganadores_estudiante"),
-    UniqueConstraint("id_premio", name="uq_ganadores_premio"),
+    # Sin clave única: un premio se puede entregar más de una vez.
+    Index("idx_ganadores_premio", "id_premio"),
     **_MYSQL_EVENTO,
 )
 
@@ -132,7 +136,7 @@ administradores = Table(
 INSCRIPTO = estudiantes.c.inscripto == 1
 # Inscriptos que todavía no ganaron: entre ellos se sortea.
 EN_JUEGO = and_(INSCRIPTO, estudiantes.c.id.not_in(select(ganadores.c.id_estudiante)))
-# Premios que todavía no se entregaron.
+# Premios que todavía no se entregaron ninguna vez.
 SIN_ENTREGAR = premios.c.id.not_in(select(ganadores.c.id_premio))
 
 configuracion = Table(
@@ -310,6 +314,7 @@ def init_db():
     llamar muchas veces (y desde varios procesos a la vez)."""
     metadata.create_all(motor())
     _revisar_tablas()
+    _permitir_premios_repetidos()
     _insertar_si_falta(
         sorteo,
         {"id": 1, "estado": "listo", "numero": 0, "ultimo": None, "version": 0, "version_participantes": 0},
@@ -340,6 +345,62 @@ def _revisar_tablas():
             "script de la base (crea estudiantes, premios y ganadores); en la computadora, "
             "ejecutá `python gestion.py reset`."
         )
+
+
+def _unicas_de_premio():
+    """Claves únicas de la tabla ganadores que abarcan solo id_premio (las
+    que no dejan entregar un premio más de una vez)."""
+    inspector = inspect(motor())
+    nombres = {u["name"] for u in inspector.get_unique_constraints("ganadores") if u["column_names"] == ["id_premio"]}
+    nombres |= {
+        i["name"] for i in inspector.get_indexes("ganadores") if i.get("unique") and i["column_names"] == ["id_premio"]
+    }
+    return nombres
+
+
+def _permitir_premios_repetidos():
+    """Un premio se puede entregar más de una vez, pero la tabla ganadores
+    del script de la base (y la de versiones anteriores del sorteador) tiene
+    una clave única en id_premio que no lo deja: se quita, dejando un índice
+    común para la clave foránea. Si no se puede (por ejemplo, porque el usuario
+    de la base no tiene permiso para modificar tablas), se avisa en el
+    registro y el sorteador sigue funcionando; en ese caso hay que quitarla a
+    mano (ver README)."""
+    try:
+        unicas = _unicas_de_premio()
+        if not unicas:
+            return
+        if motor().dialect.name == "sqlite":
+            _rehacer_ganadores_sqlite()
+        else:
+            with transaccion() as con:
+                indices = {i["name"] for i in inspect(con).get_indexes("ganadores")}
+                if "idx_ganadores_premio" not in indices:
+                    con.exec_driver_sql("ALTER TABLE ganadores ADD INDEX idx_ganadores_premio (id_premio)")
+                comillas = con.dialect.identifier_preparer
+                for nombre in unicas:
+                    con.exec_driver_sql(f"ALTER TABLE ganadores DROP INDEX {comillas.quote(nombre)}")
+        log.info("Se quitó la clave única de ganadores.id_premio: un premio se puede entregar más de una vez.")
+    except Exception:
+        # Otro proceso pudo haberla quitado al mismo tiempo.
+        if _unicas_de_premio():
+            log.exception(
+                "No se pudo quitar la clave única de ganadores.id_premio: no se va a poder entregar "
+                "un premio más de una vez hasta quitarla a mano (ver README)."
+            )
+
+
+def _rehacer_ganadores_sqlite():
+    """SQLite no puede quitar una restricción de una tabla: se rehace la
+    tabla ganadores con la estructura nueva, conservando las filas."""
+    with transaccion() as con:
+        con.exec_driver_sql("ALTER TABLE ganadores RENAME TO ganadores_anterior")
+        ganadores.create(con)
+        con.exec_driver_sql(
+            "INSERT INTO ganadores (id, id_estudiante, id_premio, fecha) "
+            "SELECT id, id_estudiante, id_premio, fecha FROM ganadores_anterior"
+        )
+        con.exec_driver_sql("DROP TABLE ganadores_anterior")
 
 
 def cargar_demo():

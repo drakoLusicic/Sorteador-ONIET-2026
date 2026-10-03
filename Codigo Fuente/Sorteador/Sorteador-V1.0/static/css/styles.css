@@ -521,17 +521,14 @@ body {
 /* ------------------------------------------------------------------ */
 /* Botón Sortear: un botón de arcade a la izquierda de la máquina     */
 /* ------------------------------------------------------------------ */
-/* Solo aparece en el navegador donde se entró al administrador (app.js
-   marca el escenario con .con-sortear y le hace lugar). Las medidas van en
-   em: 1em es la décima parte del diámetro (en la tapa, un 10% más, porque
-   su letra es más grande). */
+/* Las medidas van en em: 1em es la décima parte del diámetro (en la tapa,
+   un 10% más, porque su letra es más grande). */
 .btn-sortear {
   position: absolute;
   left: var(--x-boton);
   top: calc((var(--s) - var(--boton)) / 2);
   width: var(--boton);
   height: var(--boton);
-  display: none;
   padding: 0;
   font: inherit;
   font-size: calc(var(--boton) / 10);
@@ -547,10 +544,6 @@ body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: box-shadow 0.2s;
-}
-
-.escenario.con-sortear .btn-sortear {
-  display: block;
 }
 
 /* Aro de luces (giran mientras dura el sorteo, como corren las de la máquina) */
@@ -802,6 +795,40 @@ body {
   animation: entrar 0.7s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
+/* X para cerrar la ventana del ganador (lo mismo que Continuar) */
+.modal-cerrar {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--texto);
+  border-radius: 50%;
+  border: 1px solid var(--panel-borde);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.modal-cerrar:hover {
+  background: linear-gradient(135deg, var(--magenta), var(--naranja));
+  transform: scale(1.08);
+}
+
+.modal-cerrar:focus-visible {
+  outline: 3px solid var(--rosa);
+  outline-offset: 3px;
+}
+
+.modal-cerrar:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .modal-rayos {
   position: absolute;
   inset: -45%;
@@ -863,47 +890,52 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Panel de la llave: contraseña del administrador                    */
+/* Ingreso: usuario y contraseña (templates/entrar.html)              */
 /* ------------------------------------------------------------------ */
-.panel-admin {
-  margin: auto;
-  width: min(92vw, 380px);
-  padding: 0;
-  border: 1px solid rgba(255, 138, 61, 0.5);
-  border-radius: var(--radio);
-  color: var(--texto);
-  background: linear-gradient(160deg, #1c1419 0%, #2e0c25 100%);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(229, 25, 138, 0.25);
+/* Con la misma estética de la pantalla, porque es lo primero que se ve. */
+.pagina-ingreso {
+  overflow-y: auto;
 }
 
-.panel-admin[open] {
-  animation: fundido 0.2s ease;
+.ingreso {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 4vh, 40px);
+  padding: 16px;
 }
 
-.panel-admin::backdrop {
-  background: rgba(6, 3, 5, 0.6);
-  backdrop-filter: blur(4px);
-}
-
-.panel-admin-form {
+.ingreso-tarjeta {
+  width: min(100%, 380px);
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 24px;
+  border: 1px solid rgba(255, 138, 61, 0.5);
+  border-radius: var(--radio);
+  background: linear-gradient(160deg, #1c1419 0%, #2e0c25 100%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(229, 25, 138, 0.25);
+  animation: fundido 0.3s ease;
 }
 
-.panel-admin-titulo {
+.ingreso-titulo {
   font-size: 1.25rem;
   font-weight: 800;
-  margin-bottom: 4px;
 }
 
-.panel-admin-campo {
+.ingreso-texto,
+.ingreso-campo {
   font-size: 0.9rem;
   color: var(--texto-suave);
 }
 
-.panel-admin-form input {
+.ingreso-texto {
+  margin-bottom: 4px;
+}
+
+.ingreso-tarjeta input {
   width: 100%;
   padding: 10px 14px;
   font: inherit;
@@ -913,68 +945,57 @@ body {
   background: rgba(0, 0, 0, 0.35);
 }
 
-.panel-admin-form input:focus-visible {
+.ingreso-tarjeta input:focus-visible {
   outline: 2px solid var(--rosa);
   outline-offset: 1px;
 }
 
-.panel-admin-form input + .panel-admin-campo {
+.ingreso-tarjeta input + .ingreso-campo {
   margin-top: 4px;
 }
 
-.panel-admin-aviso {
+/* Sin https la sesión no se guarda (ver SORTEADOR_COOKIE_SEGURA). */
+.ingreso-aviso {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 138, 61, 0.5);
+  background: rgba(255, 138, 61, 0.08);
+}
+
+.ingreso-aviso code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.ingreso-error {
   min-height: 1.3em;
   font-size: 0.85rem;
   color: var(--rosa);
 }
 
-.panel-admin-enlace {
-  color: var(--naranja);
-  font-weight: 600;
-}
-
-.panel-admin-enlace[hidden] {
-  display: none;
-}
-
-.panel-admin-acciones {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.btn-panel {
-  padding: 9px 18px;
+.btn-ingreso {
+  padding: 11px 18px;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--texto);
+  border: 0;
   border-radius: 999px;
-  border: 1px solid var(--panel-borde);
-  background: var(--panel);
+  background: linear-gradient(90deg, var(--magenta), var(--naranja));
   cursor: pointer;
   transition: background 0.2s, opacity 0.2s;
 }
 
-.btn-panel:hover {
-  background: rgba(255, 255, 255, 0.12);
+.btn-ingreso:hover {
+  background: linear-gradient(90deg, var(--rosa), var(--naranja));
 }
 
-.btn-panel:focus-visible {
+.btn-ingreso:focus-visible {
   outline: 3px solid var(--rosa);
   outline-offset: 2px;
 }
 
-.btn-panel-principal {
-  border-color: transparent;
-  background: linear-gradient(90deg, var(--magenta), var(--naranja));
-}
-
-.btn-panel-principal:hover {
-  background: linear-gradient(90deg, var(--rosa), var(--naranja));
-}
-
-.btn-panel:disabled {
+.btn-ingreso:disabled {
   opacity: 0.6;
   cursor: wait;
 }

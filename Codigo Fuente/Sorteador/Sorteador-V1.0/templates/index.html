@@ -27,17 +27,16 @@
 
     <div class="botones-esquina">
       <button id="btn-sonido" class="btn-redondo" type="button" aria-pressed="true" title="Sonido activado">🔊</button>
-      <!-- Pide la contraseña y abre el administrador en otra ventana -->
-      <button id="btn-admin" class="btn-redondo" type="button" aria-haspopup="dialog"
-              title="Administrador" aria-label="Abrir el administrador">🔑</button>
+      <!-- Abre (o trae adelante) la ventana del administrador -->
+      <button id="btn-admin" class="btn-redondo" type="button"
+              title="Abrir el administrador" aria-label="Abrir el administrador">🔑</button>
     </div>
   </header>
 
   <main id="escenario" class="escenario">
     <!-- app.js calcula las medidas y las pasa como variables CSS (--s, --centro, ...) -->
     <div id="conjunto" class="conjunto">
-      <!-- A la izquierda de la máquina. Solo aparece en el navegador donde se
-           entró al administrador (con la llave). -->
+      <!-- A la izquierda de la máquina -->
       <button id="btn-sortear" class="btn-sortear" type="button" disabled>
         <span class="btn-sortear-tapa">Sortear</span>
       </button>
@@ -106,6 +105,9 @@
   <div id="modal" class="modal" hidden>
     <div class="modal-tarjeta" role="dialog" aria-modal="true" aria-labelledby="modal-nombre">
       <div class="modal-rayos" aria-hidden="true"></div>
+      <!-- Lo mismo que Continuar en el administrador (o Escape) -->
+      <button id="modal-cerrar" class="modal-cerrar" type="button"
+              title="Cerrar" aria-label="Cerrar la ventana del ganador">✕</button>
       <img class="modal-mascota" src="{{ url_for('static', filename='img/mascota/jarras.png') }}" alt="">
       <p class="modal-etiqueta">¡Tenemos ganador!</p>
       <h2 id="modal-nombre" class="modal-nombre"></h2>
@@ -113,25 +115,6 @@
       <p class="modal-premio">Premio: <strong id="modal-premio"></strong></p>
     </div>
   </div>
-
-  <dialog id="panel-admin" class="panel-admin" aria-labelledby="panel-admin-titulo">
-    <form id="form-admin" class="panel-admin-form">
-      <h2 id="panel-admin-titulo" class="panel-admin-titulo">🔑 Administrador</h2>
-      <label class="panel-admin-campo" for="usuario-admin">Usuario</label>
-      <input id="usuario-admin" type="text" maxlength="50" autocomplete="off" autocapitalize="off"
-             spellcheck="false" required autofocus>
-      <label class="panel-admin-campo" for="clave-admin">Contraseña</label>
-      <input id="clave-admin" type="password" autocomplete="off" required>
-      <p id="aviso-admin" class="panel-admin-aviso" role="alert"></p>
-      <!-- Solo si el navegador bloqueó la ventana nueva: con este clic sí la abre -->
-      <a id="enlace-admin" class="panel-admin-enlace" href="{{ url_for('administrador') }}"
-         target="sorteador-admin" hidden>Abrir el administrador</a>
-      <div class="panel-admin-acciones">
-        <button id="btn-cancelar-admin" class="btn-panel" type="button">Cancelar</button>
-        <button id="btn-entrar-admin" class="btn-panel btn-panel-principal" type="submit">Entrar</button>
-      </div>
-    </form>
-  </dialog>
 
   <canvas id="confeti" class="confeti" aria-hidden="true"></canvas>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

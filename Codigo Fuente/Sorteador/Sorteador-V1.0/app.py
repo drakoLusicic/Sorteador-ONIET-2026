@@ -1,13 +1,13 @@
 """Sorteador ONIET 30 - servidor Flask.
 
-Sirve dos ventanas: la pantalla del sorteador (`/`), que se proyecta al
-público, y el administrador (`/admin`, con usuario y contraseña), desde
-donde se ordena el listado, se manejan los premios y se cierra la ventana
-del ganador. Los participantes son los estudiantes inscriptos (tabla
-estudiantes, inscripto = 1) y los usuarios del administrador están en la
-tabla administradores. La pantalla tiene el botón de la llave, que pide
-usuario y contraseña y abre el administrador en otra ventana, y el botón
-Sortear, que aparece solo en el navegador donde se entró al administrador.
+Todo el programa necesita usuario y contraseña (tabla administradores).
+Al entrar a la dirección del sorteador (`/`) aparece primero el ingreso; con
+los datos correctos, esa ventana pasa a ser la pantalla del sorteador (la
+ruleta, que se proyecta, con el botón Sortear) y el administrador (`/admin`)
+se abre en otra ventana. Desde el administrador se ordena el listado, se
+manejan los premios y se cierra la ventana del ganador; en la pantalla, el
+botón de la llave lo vuelve a abrir. Los participantes son los estudiantes
+inscriptos (tabla estudiantes, inscripto = 1).
 
 Las ventanas consultan el estado cada segundo (`/api/estado`). El estado del
 sorteo se guarda en la base de datos y no en memoria: en el hosting
@@ -40,6 +40,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import check_password_hash
 
@@ -145,7 +146,7 @@ def _cabeceras_seguridad(resp):
 
 
 # --------------------------------------------------------------------------- #
-# Administrador: usuario, contraseña y sesión
+# Usuario, contraseña y sesión (para todo el programa)
 # --------------------------------------------------------------------------- #
 MAX_LARGO_USUARIO = 50  # administradores.usuario es VARCHAR(50)
 MAX_LARGO_CLAVE = 200
@@ -223,14 +224,15 @@ def intentar_entrar(usuario, clave):
 
 
 def requiere_admin(vista):
-    """Para la API del administrador. Los pedidos que cambian algo además
-    tienen que traer la cabecera X-Sorteador (la agrega api.js): una página
-    de otro sitio no puede agregarla, así no puede usar la sesión abierta."""
+    """Para la API (toda necesita la sesión, salvo el ingreso). Los pedidos
+    que cambian algo además tienen que traer la cabecera X-Sorteador (la
+    agrega api.js): una página de otro sitio no puede agregarla, así no puede
+    usar la sesión abierta."""
 
     @wraps(vista)
     def envoltura(*args, **kwargs):
         if not es_admin():
-            return error("La sesión del administrador se cerró. Volvé a entrar.", 401)
+            return error("La sesión se cerró. Volvé a entrar.", 401)
         if request.method not in ("GET", "HEAD") and request.headers.get("X-Sorteador") != "1":
             return error("Pedido no permitido.", 403)
         return vista(*args, **kwargs)
@@ -256,18 +258,27 @@ def limpiar_premio(valor):
     return str(valor or "").strip()[:MAX_LARGO_PREMIO]
 
 
+def primero_sin_entregar(con):
+    """El primer premio de la lista que todavía no se entregó, o None."""
+    fila = con.execute(
+        select(premios.c.id, premios.c.nombre).where(bd.SIN_ENTREGAR).order_by(premios.c.id).limit(1)
+    ).mappings().first()
+    return dict(fila) if fila else None
+
+
 def premio_actual(con):
-    """El premio que se sortea a continuación. Cada premio se entrega una sola
-    vez: es el elegido en el administrador mientras no se haya entregado; si
-    no, el primero de la lista que falta entregar. None si no queda ninguno."""
-    lista = con.execute(
-        select(premios.c.id, premios.c.nombre).where(bd.SIN_ENTREGAR).order_by(premios.c.id)
-    ).mappings().all()
+    """El premio que se sortea a continuación: el elegido en el administrador,
+    aunque ya se haya entregado (un premio se puede entregar más de una vez).
+    Si no hay uno elegido (o se quitó), el primero de la lista que falta
+    entregar o, si ya se entregaron todos, el primero. None si no hay premios."""
+    lista = con.execute(select(premios.c.id, premios.c.nombre).order_by(premios.c.id)).mappings().all()
+    if not lista:
+        return None
     elegido = bd.leer_config(con, "premio_id")
     for premio in lista:
         if str(premio["id"]) == elegido:
             return dict(premio)
-    return dict(lista[0]) if lista else None
+    return primero_sin_entregar(con) or dict(lista[0])
 
 
 def leer_sorteo(con):
@@ -351,6 +362,12 @@ def registrar_pantalla(cliente):
 # --------------------------------------------------------------------------- #
 @app.get("/")
 def pantalla():
+    """La pantalla del sorteador. Sin sesión, primero el ingreso (entrar.js
+    abre la sesión y el administrador en otra ventana, y vuelve acá)."""
+    if not es_admin():
+        # Con la cookie segura, sin https el navegador no la guarda.
+        sin_https = app.config["SESSION_COOKIE_SECURE"] and not request.is_secure
+        return render_template("entrar.html", sin_https=sin_https)
     with bd.conexion() as con:
         premio = premio_actual(con)
     return render_template("index.html", premio=premio)
@@ -359,30 +376,15 @@ def pantalla():
 @app.get("/admin")
 def administrador():
     if not es_admin():
-        return redirect(url_for("entrar"))
+        return redirect(url_for("pantalla"))
     return render_template("admin.html")
-
-
-@app.route("/admin/entrar", methods=["GET", "POST"])
-def entrar():
-    if es_admin():
-        return redirect(url_for("administrador"))
-
-    aviso = None
-    usuario = request.form.get("usuario", "")
-    if request.method == "POST":
-        aviso = intentar_entrar(usuario, request.form.get("clave", ""))
-        if aviso is None:
-            return redirect(url_for("administrador"))
-    # Con la cookie segura, sin https el navegador no la guarda.
-    sin_https = app.config["SESSION_COOKIE_SECURE"] and not request.is_secure
-    return render_template("entrar.html", aviso=aviso, usuario=usuario, sin_https=sin_https)
 
 
 @app.post("/admin/salir")
 def salir():
+    """Cierra la sesión: el administrador y las pantallas vuelven al ingreso."""
     session.clear()
-    return redirect(url_for("entrar"))
+    return redirect(url_for("pantalla"))
 
 
 @app.get("/salud")
@@ -400,30 +402,28 @@ def salud():
 
 
 # --------------------------------------------------------------------------- #
-# API pública (la usa la pantalla del sorteador)
+# API de la pantalla del sorteador
 # --------------------------------------------------------------------------- #
 @app.get("/api/estado")
+@requiere_admin
 def ver_estado():
     """Lo consultan las ventanas cada segundo. Las pantallas agregan
-    `latido=1` cada pocos segundos para avisar que siguen abiertas, y
-    reciben `admin`: si en ese navegador se entró al administrador (ahí
-    muestran el botón Sortear)."""
+    `latido=1` cada pocos segundos para avisar que siguen abiertas."""
     cliente = request.args.get("cliente", "")
-    es_pantalla = request.args.get("rol") == "pantalla"
-    if es_pantalla and request.args.get("latido") and CLIENTE_VALIDO.fullmatch(cliente):
+    if request.args.get("rol") == "pantalla" and request.args.get("latido") and CLIENTE_VALIDO.fullmatch(cliente):
         if registrar_pantalla(cliente):
             olvidar_estado()  # el administrador ve enseguida que se abrió
-    datos = estado_actual()
-    if es_pantalla:
-        datos = {**datos, "admin": es_admin()}  # copia: el estado guardado es compartido
-    resp = jsonify(datos)
+    resp = jsonify(estado_actual())
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
 @app.post("/api/adios")
 def adios():
-    """La pantalla avisa que se cierra (así el administrador lo ve enseguida)."""
+    """La pantalla avisa que se cierra (así el administrador lo ve enseguida).
+    Llega con sendBeacon, que no puede agregar la cabecera X-Sorteador, así
+    que no pide la sesión: solo borra el aviso de esa pantalla (su id es al
+    azar)."""
     cliente = request.args.get("cliente", "")
     if CLIENTE_VALIDO.fullmatch(cliente):
         with bd.transaccion() as con:
@@ -433,9 +433,10 @@ def adios():
 
 
 @app.get("/api/participantes")
+@requiere_admin
 def listar_participantes():
-    """Los estudiantes inscriptos, con el premio de quienes ya ganaron. Es
-    pública: solo lleva el id, el nombre y el apellido (ni DNI ni email)."""
+    """Los estudiantes inscriptos, con el premio de quienes ya ganaron. Solo
+    lleva el id, el nombre y el apellido (ni DNI ni email)."""
     with bd.conexion() as con:
         orden = request.args.get("orden") or bd.leer_config(con, "orden", "apellido")
         if orden not in ORDENES:
@@ -464,6 +465,7 @@ def listar_participantes():
 
 
 @app.post("/api/revelado")
+@requiere_admin
 def revelado():
     """La pantalla avisa que el listado se detuvo y ya muestra al ganador."""
     numero = (request.get_json(silent=True) or {}).get("numero")
@@ -480,9 +482,9 @@ def revelado():
 
 
 @app.post("/api/entrar")
-def entrar_desde_pantalla():
-    """El botón de la llave de la pantalla: con el usuario y la contraseña
-    correctos abre la sesión del administrador, y la pantalla abre su ventana."""
+def entrar():
+    """El ingreso: con el usuario y la contraseña correctos abre la sesión, y
+    la página abre la pantalla del sorteador y el administrador."""
     if request.headers.get("X-Sorteador") != "1":
         return error("Pedido no permitido.", 403)
     datos = request.get_json(silent=True) or {}
@@ -511,30 +513,19 @@ def cambiar_orden():
 @app.get("/api/premios")
 @requiere_admin
 def listar_premios():
-    """Premios y, si ya se entregó, a quién."""
+    """Premios y a quiénes se entregó cada uno (en el orden en que salieron)."""
     with bd.conexion() as con:
-        filas = con.execute(
-            select(
-                premios.c.id,
-                premios.c.nombre,
-                ganadores.c.id_estudiante,
-                estudiantes.c.nombre.label("ganador_nombre"),
-                estudiantes.c.apellido.label("ganador_apellido"),
-            )
-            .select_from(
-                premios.outerjoin(ganadores, ganadores.c.id_premio == premios.c.id)
-                .outerjoin(estudiantes, estudiantes.c.id == ganadores.c.id_estudiante)
-            )
-            .order_by(premios.c.id)
+        lista = con.execute(select(premios.c.id, premios.c.nombre).order_by(premios.c.id)).mappings().all()
+        entregas = con.execute(
+            select(ganadores.c.id_premio, estudiantes.c.id, estudiantes.c.nombre, estudiantes.c.apellido)
+            .select_from(ganadores.join(estudiantes, estudiantes.c.id == ganadores.c.id_estudiante))
+            .order_by(ganadores.c.id)
         ).mappings().all()
+    por_premio = {}
+    for f in entregas:
+        por_premio.setdefault(f["id_premio"], []).append({"id": f["id"], "nombre": f"{f['apellido']}, {f['nombre']}"})
     return jsonify(premios=[
-        {
-            "id": f["id"],
-            "nombre": f["nombre"],
-            "entregado": f["id_estudiante"] is not None,
-            "ganador": f"{f['ganador_apellido']}, {f['ganador_nombre']}" if f["id_estudiante"] is not None else None,
-        }
-        for f in filas
+        {"id": p["id"], "nombre": p["nombre"], "ganadores": por_premio.get(p["id"], [])} for p in lista
     ])
 
 
@@ -592,10 +583,9 @@ def quitar_premio(premio_id):
 def elegir_premio():
     premio_id = (request.get_json(silent=True) or {}).get("id")
     with bd.transaccion() as con:
+        # Puede estar entregado: un premio se puede entregar más de una vez.
         if con.execute(select(premios.c.id).where(premios.c.id == premio_id)).first() is None:
             raise ErrorApi("Ese premio no existe.", 404)
-        if con.execute(select(ganadores.c.id).where(ganadores.c.id_premio == premio_id)).first() is not None:
-            raise ErrorApi("Ese premio ya se entregó.")
         bd.guardar_config(con, "premio_id", premio_id)
         tocar(con)
     olvidar_estado()
@@ -606,7 +596,9 @@ def elegir_premio():
 @requiere_admin
 def sortear():
     """Elige un ganador al azar entre los inscriptos que todavía no ganaron,
-    para el premio actual (que así queda entregado).
+    para el premio actual. Después el próximo premio pasa a ser el primero de
+    la lista que falta entregar (si ya se entregaron todos, sigue el mismo);
+    desde el administrador se puede volver a elegir uno ya entregado.
 
     El ganador se decide en el servidor. La pantalla recibe el resultado y
     solo lo anima: la mascota tira de la palanca y el listado gira hasta él.
@@ -628,7 +620,7 @@ def sortear():
             raise ErrorApi("La pantalla del sorteador no está abierta.")
         premio = premio_actual(con)
         if premio is None:
-            raise ErrorApi("No quedan premios sin entregar. Agregá uno para poder sortear.")
+            raise ErrorApi("No hay premios. Agregá uno para poder sortear.")
 
         candidatos = con.execute(
             select(estudiantes.c.id, estudiantes.c.nombre, estudiantes.c.apellido)
@@ -639,9 +631,17 @@ def sortear():
             raise ErrorApi("No quedan participantes para sortear.")
 
         elegido = dict(secrets.choice(candidatos))
-        con.execute(
-            insert(ganadores).values(id_estudiante=elegido["id"], id_premio=premio["id"], fecha=bd.ahora_local())
-        )
+        try:
+            con.execute(
+                insert(ganadores).values(id_estudiante=elegido["id"], id_premio=premio["id"], fecha=bd.ahora_local())
+            )
+        except IntegrityError as exc:
+            # La base todavía tiene la clave única en ganadores.id_premio (ver database.py).
+            raise ErrorApi(
+                "La base de datos todavía no deja entregar un premio más de una vez. Reiniciá la aplicación; "
+                "si sigue igual, quitá la clave única de ganadores.id_premio (ver README)."
+            ) from exc
+        bd.guardar_config(con, "premio_id", (primero_sin_entregar(con) or premio)["id"])
         numero = con.execute(select(tabla_sorteo.c.numero).where(tabla_sorteo.c.id == 1)).scalar_one()
         ultimo = {"numero": numero, "ganador": elegido, "premio": premio["nombre"], "premio_id": premio["id"]}
         con.execute(
@@ -681,8 +681,8 @@ def reiniciar():
 
 
 # --------------------------------------------------------------------------- #
-# Uso en la computadora: `python app.py` abre la pantalla del sorteador
-# (el administrador se abre desde su botón de la llave)
+# Uso en la computadora: `python app.py` abre el ingreso, que después abre la
+# pantalla del sorteador y el administrador
 # --------------------------------------------------------------------------- #
 def buscar_navegador():
     """Chrome o Edge: abren la página como una ventana propia, sin barra de
@@ -730,7 +730,7 @@ def abrir_pantalla(url):
 
     # Un perfil propio hace que estas opciones se apliquen aunque el navegador
     # ya esté abierto, y que recuerde dónde quedó la ventana. El administrador
-    # que se abre desde la llave usa el mismo perfil (y la misma sesión).
+    # que se abre al entrar usa el mismo perfil (y la misma sesión).
     perfil = Path(tempfile.gettempdir()) / "sorteador-oniet30"
     opciones = [
         f"--user-data-dir={perfil}",
@@ -756,7 +756,7 @@ if __name__ == "__main__":
     # los cambios del código y el servidor (WERKZEUG_RUN_MAIN). La pantalla
     # se abre una sola vez, desde el primero.
     if not os.environ.get("WERKZEUG_RUN_MAIN"):
-        print(f"Pantalla del sorteador: {url}/\nAdministrador:          {url}/admin (o la llave de la pantalla)")
+        print(f"Sorteador (pide usuario y contraseña): {url}/")
         if "--sin-ventanas" not in sys.argv:
             threading.Thread(target=abrir_pantalla, args=(url,), daemon=True).start()
     app.run(debug=True, port=PUERTO, threaded=True)

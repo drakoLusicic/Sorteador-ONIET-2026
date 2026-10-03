@@ -234,16 +234,6 @@ input:focus-visible {
   font-weight: 600;
 }
 
-/* Ya entregado: no se puede elegir ni quitar. */
-.premio.entregado label {
-  cursor: default;
-}
-
-.premio.entregado .premio-nombre {
-  color: var(--texto-suave);
-  text-decoration: line-through;
-}
-
 .btn-quitar:disabled {
   visibility: hidden;
 }
@@ -443,11 +433,7 @@ select:disabled {
   gap: 12px;
 }
 
-.entrar a {
-  color: var(--acento-2);
-}
-
-/* Página para entrar al administrador */
+/* Página de aviso cuando no hay conexión con la base (templates/error.html) */
 .pagina-entrar {
   display: grid;
   place-items: center;
@@ -464,38 +450,10 @@ select:disabled {
   font-size: 1.2rem;
 }
 
-.form-entrar {
-  display: grid;
-  gap: 8px;
-}
-
-.form-entrar input {
-  font: inherit;
-  color: var(--texto);
-  padding: 8px 10px;
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  background: #121212;
-}
-
-.form-entrar .btn {
-  margin-top: 4px;
-}
-
 .aviso-entrar {
   padding: 10px 12px;
   font-size: 0.9rem;
   border: 1px solid rgba(255, 138, 61, 0.5);
   border-radius: 8px;
   background: rgba(255, 138, 61, 0.08);
-}
-
-.error-entrar {
-  font-size: 0.9rem;
-  color: var(--error);
-}
-
-code {
-  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 0.85em;
 }

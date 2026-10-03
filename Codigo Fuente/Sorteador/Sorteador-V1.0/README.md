@@ -2,10 +2,10 @@
 
 Sorteador interactivo para el evento ONIET 30. Backend en Python (Flask) con base de datos MySQL/MariaDB en el hosting (o SQLite para probar en la computadora), y frontend en HTML, CSS y JavaScript.
 
-Tiene dos ventanas:
+Todo el programa pide usuario y contraseña, que están en la base (tabla `administradores`). Al entrar a la dirección del sorteador (`/`) lo primero que aparece es el ingreso; con los datos correctos se abren dos ventanas:
 
-- **Pantalla del sorteador** (`/`): la que se proyecta al público. No tiene controles del sorteo y cualquiera la puede abrir (también desde el celular).
-- **Administrador** (`/admin`): desde donde se sortea y se manejan los premios y los participantes. Pide usuario y contraseña, que están en la base (tabla `administradores`). Se abre desde el botón 🔑 de la pantalla o entrando directamente a `/admin`.
+- **Pantalla del sorteador** (en la misma ventana del ingreso): la ruleta que se proyecta al público, con el botón *Sortear*.
+- **Administrador** (`/admin`, en otra ventana): desde donde se manejan los premios y los participantes y se cierra la ventana del ganador. Si se cierra, el botón 🔑 de la pantalla lo vuelve a abrir.
 
 ## Probarlo en la computadora
 
@@ -16,9 +16,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Se abre solo la pantalla del sorteador (http://127.0.0.1:5000). Si está instalado Chrome o Edge, se abre como aplicación (sin barra de direcciones), con un perfil propio que recuerda dónde quedó la ventana y que deja a la pantalla reproducir sonido sin hacerle clic. Si no, se abre en el navegador predeterminado; en ese caso la pantalla pide un clic para activar el sonido.
-
-Para abrir el administrador, tocar el botón 🔑 (arriba a la derecha, abajo del de sonido) e ingresar el usuario y la contraseña: si son correctos, el administrador se abre en otra ventana.
+Se abre solo el ingreso del sorteador (http://127.0.0.1:5000): con el usuario y la contraseña, esa ventana pasa a ser la pantalla del sorteador y el administrador se abre en otra. Si está instalado Chrome o Edge, se abre como aplicación (sin barra de direcciones), con un perfil propio que recuerda dónde quedó la ventana y que deja a la pantalla reproducir sonido sin hacerle clic. Si no, se abre en el navegador predeterminado; en ese caso la pantalla pide un clic para activar el sonido.
 
 Para levantar solo el servidor, sin abrir ventanas: `python app.py --sin-ventanas`.
 
@@ -39,17 +37,17 @@ En el hosting el sorteador usa una base MySQL/MariaDB y corre con Passenger, a t
 4. **Configurar.** En la carpeta de la aplicación, copiar `.env.ejemplo` como `.env` y completarlo con los datos de la base del paso 1 (ver [Configuración](#configuración)). En lugar del archivo se pueden cargar las mismas variables en la página de la aplicación, en *Environment variables*.
 5. **Instalar las dependencias.** En la página de la aplicación, en *Configuration files*, agregar `requirements.txt` y tocar *Run Pip Install*. (O desde la *Terminal* de cPanel: activar el entorno con el comando que muestra la página de la aplicación, arriba de todo, y ejecutar `pip install -r requirements.txt`.)
 6. **Reiniciar** la aplicación (botón *Restart*). Hay que hacerlo cada vez que se cambia el `.env` o se sube código nuevo.
-7. **Activar https.** En cPanel → *SSL/TLS Status* (AutoSSL) el dominio tiene que tener certificado, y en *Dominios* conviene activar *Force HTTPS Redirect*. El administrador solo guarda la sesión por https.
+7. **Activar https.** En cPanel → *SSL/TLS Status* (AutoSSL) el dominio tiene que tener certificado, y en *Dominios* conviene activar *Force HTTPS Redirect*. El sorteador solo guarda la sesión por https.
 8. **Comprobar.** Abrir `https://midominio.com/salud`: tiene que responder `"ok": true`, `"base": "mysql"` y en `"participantes"` la cantidad de estudiantes inscriptos. Si dice que no hay conexión, revisar los datos de la base en el `.env`; el detalle del error queda en el archivo `stderr.log` de la carpeta de la aplicación (o en *Errores* de cPanel).
-9. **Revisar los datos.** Los estudiantes y los premios salen de la base. Desde el administrador (🔑 en la pantalla, o `https://midominio.com/admin`) se ve cuántos inscriptos hay y se pueden agregar premios.
+9. **Revisar los datos.** Los estudiantes y los premios salen de la base. Al entrar a `https://midominio.com/` con el usuario y la contraseña se abre el administrador, donde se ve cuántos inscriptos hay y se pueden agregar premios.
 
-El día del evento: abrir la pantalla (`https://midominio.com/`) en la computadora del proyector, **entrar con la llave 🔑** (así aparece el botón *Sortear* a la izquierda del listado), ponerla en pantalla completa con F11 y **hacerle un clic** para que el navegador deje reproducir el sonido. El resto del administrador (premios, Continuar) se puede manejar desde otra computadora o desde un celular.
+El día del evento: en la computadora del proyector, abrir `https://midominio.com/` y **entrar con el usuario y la contraseña**. Esa ventana pasa a ser la pantalla del sorteador (ponerla en pantalla completa con F11 y **hacerle un clic** para que el navegador deje reproducir el sonido) y el administrador se abre en otra ventana. Si el navegador bloquea la ventana nueva, la pantalla lo avisa: hay que permitir las ventanas emergentes del sitio y tocar 🔑. El administrador (premios, Continuar) también se puede manejar desde otra computadora o desde un celular, entrando con el mismo usuario y contraseña.
 
 ### Cómo funciona en el hosting
 
 En cPanel, Passenger corre el programa en varios procesos a la vez y los puede apagar cuando no se usan. Por eso el estado del sorteo se guarda en la base de datos (tabla `sorteo`) y cada ventana consulta `/api/estado` una vez por segundo, en lugar de mantener una conexión abierta. Cada pantalla abierta, además, avisa cada pocos segundos que sigue ahí (tabla `pantallas`); así el administrador sabe si hay alguna abierta.
 
-Cada pantalla abierta hace una consulta por segundo. Para el proyector, el administrador y algunas personas mirando desde el celular no hay problema; si se espera que la miren cientos de personas a la vez, conviene consultar con el hosting los límites del plan (procesos y CPU). El intervalo se puede cambiar en `static/js/api.js` (`INTERVALO`).
+Cada ventana abierta hace una consulta por segundo. Como todas necesitan la sesión, son pocas (el proyector y el administrador), así que no hay problema con los límites del hosting. El intervalo se puede cambiar en `static/js/api.js` (`INTERVALO`).
 
 ## Configuración
 
@@ -67,14 +65,14 @@ Sin `SORTEADOR_DB_NOMBRE` ni `SORTEADOR_DB_URL`, usa SQLite (`sorteador.db`) con
 
 ### Seguridad
 
-- La pantalla es pública; todo lo demás (sortear, continuar, premios, orden, lista de ganadores) necesita la sesión del administrador. La llave de la pantalla la abre solo con un usuario y una contraseña correctos.
+- Todo necesita la sesión, que se abre solo con un usuario y una contraseña correctos: la pantalla, el administrador y la API. Sin sesión, la dirección del sorteador muestra el ingreso, `/admin` lleva a él y la API responde 401 (las ventanas abiertas vuelven solas al ingreso). Quedan sin sesión solo el ingreso, `/salud` y el aviso de que una pantalla se cierra.
 - Los usuarios están en la tabla `administradores`. De la contraseña se guarda solo un hash PBKDF2-SHA256 (1.000.000 de iteraciones, con sal al azar): no se puede revertir para obtener la contraseña. El usuario distingue mayúsculas y minúsculas.
 - Si se borra un usuario de la tabla, su sesión se cierra en el siguiente pedido.
 - Cuando el usuario o la contraseña no coinciden, la respuesta es la misma (y tarda lo mismo) exista o no el usuario.
 - Los pedidos que cambian algo además llevan una cabecera propia (`X-Sorteador`), que una página de otro sitio no puede agregar: así no puede aprovechar una sesión abierta.
-- El listado público de participantes solo lleva el id, el nombre y el apellido: nunca el DNI, el legajo ni el email.
-- Después de 5 intentos fallidos seguidos desde una misma dirección (en la llave o en `/admin`), hay que esperar unos minutos.
-- La sesión dura 12 horas; el botón *Salir* la cierra.
+- El listado de participantes solo lleva el id, el nombre y el apellido: nunca el DNI, el legajo ni el email.
+- Después de 5 intentos fallidos seguidos desde una misma dirección, hay que esperar unos minutos.
+- La sesión dura 12 horas; el botón *Salir* del administrador la cierra, y el administrador y la pantalla vuelven al ingreso.
 
 ## Participantes
 
@@ -88,24 +86,24 @@ Participan los estudiantes **inscriptos**: las filas de la tabla `estudiantes` c
 
 ### Administrador
 
-- **Continuar**: cierra la ventana del ganador en la pantalla (también se cierra con Escape en la pantalla, si se abrió en el mismo navegador donde se inició sesión en el administrador).
-- **Premios**: el marcado es el que se sortea a continuación y aparece en la pantalla como "Próximo premio". **Cada premio se entrega una sola vez**: después del sorteo queda tachado, con el nombre de quien lo ganó, y pasa solo al primero de la lista que falta entregar. Se pueden agregar premios y quitar los que todavía no se entregaron.
+- **Continuar**: cierra la ventana del ganador en la pantalla (también se cierra desde la pantalla, con la ✕ de esa ventana o con Escape).
+- **Premios**: el marcado es el que se sortea a continuación y aparece en la pantalla como "Próximo premio". Después de cada sorteo pasa solo al primero de la lista que todavía no se entregó (si ya se entregaron todos, sigue el mismo). **Un premio se puede entregar más de una vez**: los entregados no se tachan y se pueden volver a marcar (por ejemplo, si hay varias unidades). Al lado de cada uno dice a quién se entregó o cuántas veces (los nombres aparecen al pasarle el mouse). Se pueden agregar premios y quitar los que todavía no se entregaron.
 - **Ordenar por**: ordena el listado de la pantalla por apellido o por ID de participante.
 - **Reiniciar ganadores**: borra la lista de ganadores (tabla `ganadores`): todos los inscriptos vuelven a entrar en juego y los premios quedan sin entregar.
 - **Ganadores** (columna de la derecha): cada ganador con su premio y la hora, el más reciente arriba y numerados en el orden en que salieron. El ganador aparece recién cuando la pantalla lo muestra.
 
-Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlace para abrirla. En la sección *Sorteo* dice qué falta para poder sortear. El botón *Salir* cierra la sesión.
+Arriba se indica si la pantalla del sorteador está abierta; si no, hay un enlace para abrirla. En la sección *Sorteo* dice qué falta para poder sortear. El botón *Salir* cierra la sesión (también en la pantalla).
 
 ### Pantalla
 
-- **Sortear** (el botón redondo a la izquierda del listado): la mascota tira de la palanca y el listado gira. Es un botón de arcade que se hunde al apretarlo y queda hundido, con su aro de luces girando, hasta que termina el sorteo. Aparece solo en el navegador donde se entró con la llave 🔑 (el público que mira la pantalla desde otro lado no lo ve, y para ellos el listado sigue centrado). Está apagado si no queda algún inscripto en juego o algún premio sin entregar; al pasarle el mouse dice qué falta.
+- **Sortear** (el botón redondo a la izquierda del listado): la mascota tira de la palanca y el listado gira. Es un botón de arcade que se hunde al apretarlo y queda hundido, con su aro de luces girando, hasta que termina el sorteo. Está apagado si no queda algún inscripto en juego o algún premio sin entregar; al pasarle el mouse dice qué falta.
 - **El listado de participantes es el tragamonedas.** La fila que queda sobre la línea del medio es la ganadora. Mientras no gira, se puede recorrer con la rueda del mouse, arrastrando o con las flechas del teclado.
-- Cuando el listado se detiene, aparece una ventana con el ganador hasta que el administrador toca Continuar.
-- **No se puede ganar dos veces**: cuando el administrador toca Continuar, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron).
+- Cuando el listado se detiene, aparece una ventana con el ganador hasta que se cierra con su ✕ (arriba a la derecha), con Escape o con Continuar en el administrador. Las tres hacen lo mismo y pasan por el servidor, así que el administrador y las demás pantallas se enteran.
+- **No se puede ganar dos veces**: cuando se cierra la ventana del ganador, el ganador sale del listado (y el servidor solo sortea entre quienes no ganaron).
 - En cada sorteo el listado da al menos 3 vueltas completas, por más participantes que haya. Con cientos, el tramo rápido se ve borroso, como un tambor girando.
 - 🔊 (arriba a la derecha) activa o desactiva el sonido.
-- 🔑 (abajo del sonido) pide usuario y contraseña y, si son correctos, abre el administrador en otra ventana. Si el navegador bloquea la ventana nueva, en el mismo panel aparece un enlace para abrirla.
-- **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con el botón *Sortear* a su izquierda (si se muestra) y la palanca y la mascota a su derecha, y el logo de la Universidad abajo. El botón mide el 80% del ancho de la máquina (`BOTON` en `app.js`). Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 64% (`PARTE_MAQUINA`; 60% con el botón) y la mascota, la palanca y el botón se achican juntos, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
+- 🔑 (abajo del sonido) abre el administrador en otra ventana (o la trae adelante), sin volver a pedir el usuario y la contraseña.
+- **Se adapta a cualquier pantalla** (computadora, tablet o celular, parado o acostado) manteniendo el mismo orden: logo y premio arriba, el listado en el centro con el botón *Sortear* a su izquierda y la palanca y la mascota a su derecha, y el logo de la Universidad abajo. El botón mide el 80% del ancho de la máquina (`BOTON` en `app.js`). Si no entra todo a lo ancho, `app.js` reparte el ancho: la máquina se queda con el 60% (`PARTE_MAQUINA`) y la mascota, la palanca y el botón se achican juntos, para que la mano siga llegando al pomo. En celulares la letra del listado es más chica para que entren los nombres, y con el celular acostado el logo y el premio van en una sola línea.
 
 ## Mascota y palanca
 
@@ -145,7 +143,7 @@ python herramientas/procesar_logos.py
 ## Estructura
 
 ```
-app.py                  Servidor Flask: páginas, API, sesión del administrador
+app.py                  Servidor Flask: páginas, API, usuario, contraseña y sesión
 passenger_wsgi.py       Punto de entrada para el hosting (cPanel / Passenger)
 config.py               Configuración (variables de entorno o archivo .env)
 database.py             Tablas (SQLAlchemy) y conexión a SQLite o MySQL
@@ -153,11 +151,12 @@ gestion.py              Tareas desde la terminal: crear tablas, datos de ejemplo
 .env.ejemplo            Modelo del archivo de configuración
 templates/index.html    Pantalla del sorteador
 templates/admin.html    Administrador
-templates/entrar.html   Usuario y contraseña del administrador
+templates/entrar.html   Ingreso con usuario y contraseña (lo primero que aparece)
 templates/error.html    Aviso cuando no hay conexión con la base
 static/css/styles.css   Estilos de la pantalla (paleta del afiche del sorteo)
 static/css/admin.css    Estilos del administrador
-static/js/api.js        Pedidos a la API y consulta periódica del estado (compartido)
+static/js/api.js        Pedidos a la API, consulta periódica del estado y ventana del administrador (compartido)
+static/js/entrar.js     Ingreso: abre la sesión, el administrador y la pantalla
 static/js/carrete.js    Listado con forma de tambor de tragamonedas
 static/js/palanca.js    Palanca
 static/js/mascota.js    Animaciones de la mascota
@@ -176,9 +175,9 @@ El servidor es quien manda: guarda el premio, el orden y el estado del sorteo en
 
 1. **Sortear** (el botón de la pantalla) elige al ganador en el servidor y lo registra. El sorteo pasa a `sorteando` (y sube su número); la pantalla que lo pidió lo anima enseguida y las demás, al verlo, animan el sorteo hasta ese ganador.
 2. Cuando el listado se detiene, la pantalla avisa (`/api/revelado`, con el número del sorteo) y el sorteo pasa a `ganador`; recién ahí el administrador ve quién ganó.
-3. **Continuar** lo vuelve a `listo` y las pantallas cierran la ventana del ganador.
+3. **Continuar** (o la ✕ de la ventana del ganador) lo vuelve a `listo` y las pantallas cierran la ventana del ganador.
 
-Todo esto pasa en transacciones de la base: si dos pedidos de sortear llegan juntos (por ejemplo, un doble clic desde dos dispositivos), solo uno sortea. Si se recarga la pantalla en medio de un sorteo, muestra directamente al ganador. Si hay varias pantallas abiertas (el proyector y celulares), todas muestran el mismo ganador.
+Todo esto pasa en transacciones de la base: si dos pedidos de sortear llegan juntos (por ejemplo, un doble clic desde dos dispositivos), solo uno sortea. Si se recarga la pantalla en medio de un sorteo, muestra directamente al ganador. Si hay varias pantallas abiertas, todas muestran el mismo ganador.
 
 ## Base de datos
 
@@ -188,7 +187,7 @@ Tablas del evento. En el hosting se crean importando el script de la base en php
 |---------------|--------------------------------------------------------------------------------------------|
 | `estudiantes` | `id`, `legajo`, `dni`, `nombre`, `apellido`, `email`, `inscripto` (0/1), `fecha_inscripcion`. Participan los que tienen `inscripto = 1` |
 | `premios`     | `id`, `nombre` (hasta 150 caracteres)                                                      |
-| `ganadores`   | `id_estudiante`, `id_premio`, `fecha`. Nadie gana dos veces y cada premio se entrega una sola vez (claves únicas) |
+| `ganadores`   | `id_estudiante`, `id_premio`, `fecha`. Nadie gana dos veces (clave única en `id_estudiante`); un premio se puede entregar más de una vez |
 | `administradores` | `id`, `usuario` (único, distingue mayúsculas), `clave_hash`. Se crea con `administradores.sql` |
 
 Tablas propias del sorteador, que crea solo al arrancar:
@@ -204,6 +203,15 @@ Tablas propias del sorteador, que crea solo al arrancar:
 - Con terminal: `python gestion.py admin USUARIO` (pide la contraseña y la guarda como hash).
 - Sin terminal: en la computadora, `python gestion.py clave USUARIO` muestra el SQL con el hash, para ejecutarlo en phpMyAdmin (pestaña *SQL*).
 - Para quitar un usuario: borrar su fila de `administradores`.
+
+**Premios repetidos.** Para que un premio se pueda entregar más de una vez, la tabla `ganadores` no puede tener una clave única en `id_premio` (el script de la base la crea). El sorteador la quita solo al arrancar, dejando un índice común para la clave foránea. Si no puede (queda el aviso en `stderr.log`, y al sortear de nuevo un premio entregado la pantalla avisa), se quita a mano en phpMyAdmin, pestaña *SQL*: `SHOW INDEX FROM ganadores;` muestra el nombre de la clave (la fila con `Column_name` = `id_premio` y `Non_unique` = `0`; con el script de la base suele ser `uq_ganadores_premio`), y después:
+
+```sql
+ALTER TABLE ganadores ADD INDEX idx_ganadores_premio (id_premio);
+ALTER TABLE ganadores DROP INDEX uq_ganadores_premio;
+```
+
+Si más adelante se vuelve a importar el script de la base, hay que reiniciar la aplicación para que la vuelva a quitar.
 
 La base no deja borrar un estudiante que ganó ni un premio entregado. Para el día del evento se vacían los ganadores con *Reiniciar ganadores* (o con el reset que trae el script de la base).
 
@@ -221,17 +229,17 @@ python gestion.py reset                        # borra la base SQLite local (sol
 
 ## API
 
-Las marcadas con 🔒 necesitan la sesión del administrador (y, si cambian algo, la cabecera `X-Sorteador: 1`).
+Las marcadas con 🔒 necesitan la sesión (y, si cambian algo, la cabecera `X-Sorteador: 1`): todas menos el ingreso, el aviso de que una pantalla se cierra (llega con `sendBeacon`, que no puede agregar cabeceras) y `/salud`.
 
 | Método | Ruta                                    | Descripción                                                  |
 |--------|-----------------------------------------|--------------------------------------------------------------|
-| GET    | `/api/estado`                           | Estado del sorteo, premio actual, orden y contadores. La pantalla agrega `rol=pantalla&cliente=…&latido=1` para avisar que sigue abierta |
+| GET    | `/api/estado` 🔒                         | Estado del sorteo, premio actual, orden y contadores. La pantalla agrega `rol=pantalla&cliente=…&latido=1` para avisar que sigue abierta |
 | POST   | `/api/adios?cliente=…`                  | La pantalla avisa que se cierra                              |
-| GET    | `/api/participantes?orden=apellido\|id` | Estudiantes inscriptos (id, nombre y apellido), con estado de ganador |
-| POST   | `/api/revelado`                         | La pantalla avisa que ya muestra al ganador (`{"numero": 7}`) |
-| POST   | `/api/entrar`                           | La llave de la pantalla: abre la sesión del administrador (`{"usuario": "...", "clave": "..."}`) |
+| GET    | `/api/participantes?orden=apellido\|id` 🔒 | Estudiantes inscriptos (id, nombre y apellido), con estado de ganador |
+| POST   | `/api/revelado` 🔒                       | La pantalla avisa que ya muestra al ganador (`{"numero": 7}`) |
+| POST   | `/api/entrar`                           | El ingreso: abre la sesión (`{"usuario": "...", "clave": "..."}`) |
 | PUT    | `/api/orden` 🔒                          | Cambia el orden del listado (`{"orden": "id"}`)              |
-| GET    | `/api/premios` 🔒                        | Premios y, si ya se entregó, a quién                         |
+| GET    | `/api/premios` 🔒                        | Premios y a quiénes se entregó cada uno                      |
 | POST   | `/api/premios` 🔒                        | Agrega un premio (`{"nombre": "..."}`)                       |
 | DELETE | `/api/premios/<id>` 🔒                   | Quita un premio                                              |
 | PUT    | `/api/premio-actual` 🔒                  | Elige el próximo premio (`{"id": 3}`)                        |

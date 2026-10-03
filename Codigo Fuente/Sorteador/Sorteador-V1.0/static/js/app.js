@@ -1,13 +1,13 @@
 /**
- * Pantalla del sorteador (la que se proyecta al público). El único control
- * del sorteo es el botón Sortear, a la izquierda del listado, que aparece solo en
- * el navegador donde se entró al administrador (con el botón de la llave, el
- * usuario y la contraseña). El premio y el orden del listado se manejan desde
- * el administrador (/admin). La pantalla escucha los avisos del servidor y
- * anima lo que corresponde: la mascota tira de la palanca, el listado gira
- * como un tragamonedas y aparece la ventana del ganador hasta que el
- * administrador toca Continuar. Cuando alguien se inscribe, el listado se
- * desliza hasta dejarlo en el centro.
+ * Pantalla del sorteador (la que se proyecta al público). Se llega después
+ * del ingreso con usuario y contraseña, que también abre el administrador
+ * (/admin) en otra ventana; la llave lo vuelve a abrir. El único control del
+ * sorteo es el botón Sortear, a la izquierda del listado. El premio y el
+ * orden del listado se manejan desde el administrador. La pantalla escucha
+ * los avisos del servidor y anima lo que corresponde: la mascota tira de la
+ * palanca, el listado gira como un tragamonedas y aparece la ventana del
+ * ganador hasta que el administrador toca Continuar. Cuando alguien se
+ * inscribe, el listado se desliza hasta dejarlo en el centro.
  */
 (function () {
   'use strict';
@@ -26,18 +26,11 @@
     btnSonido: $('#btn-sonido'),
     avisoSonido: $('#aviso-sonido'),
     btnAdmin: $('#btn-admin'),
-    panelAdmin: $('#panel-admin'),
-    formAdmin: $('#form-admin'),
-    usuarioAdmin: $('#usuario-admin'),
-    claveAdmin: $('#clave-admin'),
-    avisoAdmin: $('#aviso-admin'),
-    enlaceAdmin: $('#enlace-admin'),
-    btnEntrarAdmin: $('#btn-entrar-admin'),
-    btnCancelarAdmin: $('#btn-cancelar-admin'),
     modal: $('#modal'),
     modalNombre: $('#modal-nombre'),
     modalId: $('#modal-id'),
     modalPremio: $('#modal-premio'),
+    modalCerrar: $('#modal-cerrar'),
     toast: $('#toast'),
   };
 
@@ -47,7 +40,8 @@
     orden: null,      // orden del listado elegido en el administrador
     girando: false,   // desde que arranca un sorteo hasta que se cierra la ventana del ganador
     pidiendo: false,  // se tocó Sortear y el servidor todavía no respondió
-    conBoton: false,  // se muestra el botón Sortear (en este navegador se entró al administrador)
+    mostrado: null,   // número del sorteo cuyo ganador está en la ventana
+    cerrado: null,    // número del último sorteo cuya ventana se cerró desde acá (la X o Escape)
     compacto: false,
     servidor: null,   // último estado recibido del servidor
     conectada: true,
@@ -76,12 +70,12 @@
   }
 
   let temporizadorToast;
-  function mostrarToast(mensaje, esError = false) {
+  function mostrarToast(mensaje, esError = false, duracion = 3500) {
     el.toast.textContent = mensaje;
     el.toast.classList.toggle('error', esError);
     el.toast.classList.add('visible');
     clearTimeout(temporizadorToast);
-    temporizadorToast = setTimeout(() => el.toast.classList.remove('visible'), 3500);
+    temporizadorToast = setTimeout(() => el.toast.classList.remove('visible'), duracion);
   }
 
   // ------------------------------------------------------------------ //
@@ -116,34 +110,31 @@
   // máquina (sin pasar el 80% de su alto) y separación en diámetros.
   const BOTON = { tamano: 0.8, separacion: 0.06 };
 
-  const LADO = 16;             // margen a los costados
-  const PARTE_MAQUINA = 0.64;  // parte del ancho que se queda la máquina cuando no entra todo
-  const PARTE_MAQUINA_CON_BOTON = 0.6;
-  const MASCOTA_MINIMA = 70;   // px; con menos, no se muestra la mascota
+  const LADO = 16;            // margen a los costados
+  const PARTE_MAQUINA = 0.6;  // parte del ancho que se queda la máquina cuando no entra todo
+  const MASCOTA_MINIMA = 70;  // px; con menos, no se muestra la mascota
 
   /**
-   * Calcula el tamaño de la máquina, de la mascota y del botón Sortear (si
-   * `conBoton`) para un escenario de `ancho` x `alto` px. La máquina usa todo
-   * el alto. Si a lo ancho no entra todo, la máquina se angosta y la mascota
-   * y el botón se achican juntos (repartiendo el ancho), pero se mantiene el
-   * orden: botón, listado, palanca y mascota. Sin `conMascota` quedan solo el
-   * botón y el listado.
+   * Calcula el tamaño de la máquina, de la mascota y del botón Sortear para
+   * un escenario de `ancho` x `alto` px. La máquina usa todo el alto. Si a lo
+   * ancho no entra todo, la máquina se angosta y la mascota y el botón se
+   * achican juntos (repartiendo el ancho), pero se mantiene el orden: botón,
+   * listado, palanca y mascota. Sin `conMascota` quedan solo el botón y el
+   * listado.
    */
-  function geometria(ancho, alto, conBoton, conMascota = true) {
+  function geometria(ancho, alto, conMascota = true) {
     const margen = alto < 420 ? 8 : 16; // arriba y abajo
     const s = Math.max(200, alto - margen * 2);
     const disponible = ancho - LADO * 2;
 
     let anchoMaquina = Math.min(640, Math.max(340, s * 0.95));
     let altoMascota = conMascota ? s * 0.86 : 0;
-    let boton = conBoton ? Math.min(anchoMaquina * BOTON.tamano, s * 0.8) : 0;
+    let boton = Math.min(anchoMaquina * BOTON.tamano, s * 0.8);
     // Ancho que ocupan, a los costados de la máquina, la mascota y el botón.
     const costados = () => altoMascota * DERECHA_POR_ALTO + boton * (1 + BOTON.separacion);
     if (anchoMaquina + costados() > disponible) {
-      const parte = conBoton ? PARTE_MAQUINA_CON_BOTON : PARTE_MAQUINA;
-      anchoMaquina = Math.min(anchoMaquina, Math.max(disponible * parte, disponible - costados()));
-      const lados = costados();
-      const achique = lados ? Math.min(1, (disponible - anchoMaquina) / lados) : 1;
+      anchoMaquina = Math.min(anchoMaquina, Math.max(disponible * PARTE_MAQUINA, disponible - costados()));
+      const achique = Math.min(1, (disponible - anchoMaquina) / costados());
       altoMascota *= achique;
       boton *= achique;
     }
@@ -156,8 +147,8 @@
   }
 
   /**
-   * Ubica la máquina en el centro, el botón Sortear (si se muestra) a su
-   * izquierda y la palanca y la mascota a su derecha. Solo si la pantalla es
+   * Ubica la máquina en el centro, el botón Sortear a su izquierda y la
+   * palanca y la mascota a su derecha. Solo si la pantalla es
    * tan chica que la mascota quedaría diminuta, no se muestra la mascota.
    */
   function distribuir() {
@@ -165,9 +156,9 @@
     const alto = el.escenario.clientHeight;
     if (!ancho || !alto) return;
 
-    let g = geometria(ancho, alto, estado.conBoton);
+    let g = geometria(ancho, alto);
     estado.compacto = g.altoMascota < MASCOTA_MINIMA;
-    if (estado.compacto) g = geometria(ancho, alto, estado.conBoton, false);
+    if (estado.compacto) g = geometria(ancho, alto, false);
 
     const m = g.altoMascota;
     const anchoMascota = m * MASCOTA.proporcion;
@@ -275,7 +266,8 @@
       if (e.sorteo === 'listo' && !el.modal.hidden) cerrarModal();
       return;
     }
-    if (e.sorteo !== 'listo' && e.ultimo) {
+    // (Salvo que sea una respuesta atrasada del sorteo que se acaba de cerrar con la X.)
+    if (e.sorteo !== 'listo' && e.ultimo && e.ultimo.numero !== estado.cerrado) {
       // La pantalla se abrió (o se recargó) con un sorteo sin cerrar: muestra el resultado.
       bloquear(true);
       celebrar(e.ultimo);
@@ -300,24 +292,13 @@
     if (estado.girando || estado.pidiendo || e.sorteo !== 'listo') return 'Hay un sorteo en curso.';
     if (!e.participantes) return 'Todavía no hay estudiantes inscriptos.';
     if (!e.en_juego) return 'No quedan participantes en juego.';
-    if (!e.premio) return 'No quedan premios sin entregar: agregá uno desde el administrador.';
+    if (!e.premio) return 'No hay premios: agregá uno desde el administrador.';
     return '';
   }
 
-  /**
-   * El botón Sortear se muestra solo si en este navegador se entró al
-   * administrador (el servidor lo indica en el estado): el público que mira
-   * la pantalla desde otro lado no lo ve, y la pantalla no le deja lugar.
-   * Una vez tocado queda hundido hasta que termina el sorteo.
-   */
+  /** Una vez tocado, el botón Sortear queda hundido hasta que termina el sorteo. */
   function actualizarBotonSortear() {
     const e = estado.servidor;
-    const conBoton = Boolean(e && e.admin);
-    if (conBoton !== estado.conBoton) {
-      estado.conBoton = conBoton;
-      el.escenario.classList.toggle('con-sortear', conBoton);
-      distribuir();
-    }
     const motivo = motivoSinSorteo();
     el.btnSortear.disabled = Boolean(motivo);
     el.btnSortear.classList.toggle('presionado', estado.girando || estado.pidiendo);
@@ -411,6 +392,7 @@
     el.modalNombre.textContent = `${ganador.nombre} ${ganador.apellido}`;
     el.modalId.textContent = `Participante ${formatearId(ganador.id)}`;
     el.modalPremio.textContent = premio;
+    estado.mostrado = numero;
     el.modal.hidden = false;
     // El administrador espera este aviso para mostrar al ganador y habilitar
     // Continuar. Con el número, el aviso de una pantalla atrasada no afecta a
@@ -428,16 +410,28 @@
     if (estado.servidor) aplicarEstado(estado.servidor, true);
   }
 
-  // Escape también cierra la ventana del ganador (pasando por el servidor,
-  // para que el administrador se entere). Solo funciona en el navegador donde
-  // el administrador inició sesión; en el resto (el público) no hace nada.
-  document.addEventListener('keydown', (e) => {
-    // Con el panel de la llave abierto, Escape solo cierra el panel.
-    if (e.key === 'Escape' && !el.modal.hidden && !el.panelAdmin.open) {
-      api('/api/continuar', { method: 'POST' }).catch((err) => {
-        if (err.status !== 401 && err.status !== 403) mostrarToast(err.message, true);
-      });
+  /**
+   * La X de la ventana del ganador (o Escape): lo mismo que Continuar en el
+   * administrador, que se entera por el servidor. La ventana se cierra en
+   * cuanto el servidor responde, sin esperar la próxima consulta del estado.
+   */
+  async function continuar() {
+    if (el.modal.hidden || el.modalCerrar.disabled) return;
+    el.modalCerrar.disabled = true;
+    try {
+      await api('/api/continuar', { method: 'POST' });
+      estado.cerrado = estado.mostrado;
+      if (!el.modal.hidden) cerrarModal();
+    } catch (err) {
+      mostrarToast(err.message, true);
+    } finally {
+      el.modalCerrar.disabled = false;
     }
+  }
+
+  el.modalCerrar.addEventListener('click', continuar);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') continuar();
   });
 
   // ------------------------------------------------------------------ //
@@ -472,56 +466,20 @@
   setTimeout(actualizarAvisoSonido, 1000);
 
   // ------------------------------------------------------------------ //
-  // Administrador: la llave pide usuario y contraseña y abre su ventana
+  // Administrador: la llave abre (o trae adelante) su ventana
   // ------------------------------------------------------------------ //
-  /** Abre (o trae adelante) la ventana del administrador. Devuelve null si el navegador la bloqueó. */
-  function abrirVentanaAdmin() {
-    const ancho = Math.min(1200, screen.availWidth);
-    const alto = Math.min(860, screen.availHeight);
-    return window.open(window.rutaApi('/admin'), 'sorteador-admin', `popup,width=${ancho},height=${alto}`);
-  }
-
-  function limpiarPanelAdmin() {
-    el.usuarioAdmin.value = '';
-    el.claveAdmin.value = '';
-    el.avisoAdmin.textContent = '';
-    el.enlaceAdmin.hidden = true;
-  }
+  const AVISO_BLOQUEADO =
+    'El navegador no dejó abrir el administrador: permití las ventanas emergentes de este sitio y tocá la llave 🔑 (arriba a la derecha).';
 
   el.btnAdmin.addEventListener('click', () => {
-    limpiarPanelAdmin();
-    el.panelAdmin.showModal();
+    if (!window.abrirAdministrador()) mostrarToast(AVISO_BLOQUEADO, true, 10000);
   });
-  el.btnCancelarAdmin.addEventListener('click', () => el.panelAdmin.close());
-  el.panelAdmin.addEventListener('close', limpiarPanelAdmin);
-  el.enlaceAdmin.addEventListener('click', () => el.panelAdmin.close());
 
-  el.formAdmin.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    el.avisoAdmin.textContent = '';
-    el.btnEntrarAdmin.disabled = true;
-    try {
-      await api('/api/entrar', {
-        method: 'POST',
-        body: JSON.stringify({ usuario: el.usuarioAdmin.value, clave: el.claveAdmin.value }),
-      });
-      el.usuarioAdmin.value = '';
-      el.claveAdmin.value = '';
-      if (abrirVentanaAdmin()) {
-        el.panelAdmin.close();
-      } else {
-        // La sesión ya quedó abierta: el enlace la abre con un clic nuevo.
-        el.avisoAdmin.textContent = 'El navegador no dejó abrir la ventana.';
-        el.enlaceAdmin.hidden = false;
-        el.enlaceAdmin.focus();
-      }
-    } catch (err) {
-      el.avisoAdmin.textContent = err.message;
-      el.claveAdmin.select();
-    } finally {
-      el.btnEntrarAdmin.disabled = false;
-    }
-  });
+  // El ingreso abre el administrador al entrar; si el navegador lo bloqueó, avisa con ?sin-admin.
+  if (new URLSearchParams(window.location.search).has('sin-admin')) {
+    window.history.replaceState(null, '', window.location.pathname);
+    mostrarToast(AVISO_BLOQUEADO, true, 10000);
+  }
 
   // ------------------------------------------------------------------ //
   // Conexión con el servidor

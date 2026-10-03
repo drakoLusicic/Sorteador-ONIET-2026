@@ -15,7 +15,8 @@
         <div class="cabecera-titulo">
           <h1>Administrador del sorteo</h1>
           <form method="post" action="{{ url_for('salir') }}">
-            <button class="btn btn-chico" type="submit">Salir</button>
+            <button class="btn btn-chico" type="submit"
+                    title="Cierra la sesión: el administrador y la pantalla vuelven al ingreso">Salir</button>
           </form>
         </div>
         <p id="conexion" class="conexion">Conectando…</p>
@@ -31,13 +32,12 @@
         <p id="motivo" class="ayuda"></p>
         <p class="ayuda">
           El botón <strong>Sortear</strong> está en la pantalla del sorteador, a la izquierda de la ruleta.
-          Aparece en el navegador donde se entró con la llave 🔑 de la pantalla.
         </p>
       </section>
 
       <section class="bloque" aria-labelledby="titulo-premios">
         <h2 id="titulo-premios">Premios</h2>
-        <p class="ayuda">Marcá el premio que se sortea a continuación. Cada premio se entrega una sola vez: después del sorteo pasa solo al siguiente que falta entregar.</p>
+        <p class="ayuda">Marcá el premio que se sortea a continuación. Después de cada sorteo pasa solo al primero que todavía no se entregó. Un premio ya entregado se puede volver a marcar para sortearlo de nuevo (por ejemplo, si hay varias unidades).</p>
         <ul id="premios" class="premios"></ul>
         <form id="form-premio" class="form-premio">
           <input id="nombre-premio" type="text" maxlength="150" autocomplete="off"

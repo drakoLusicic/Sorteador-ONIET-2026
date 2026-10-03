@@ -20,8 +20,9 @@
 
   /**
    * Pide `url` y devuelve el JSON. Si el servidor responde con error, lanza
-   * su mensaje (el error trae `status`). Si la sesión del administrador se
-   * cerró, vuelve a la página para entrar.
+   * su mensaje (el error trae `status`). Si la sesión se cerró, vuelve al
+   * ingreso (salvo en el ingreso mismo, donde el 401 es un usuario o una
+   * contraseña incorrectos).
    */
   async function api(url, opciones = {}) {
     const esFormulario = opciones.body instanceof FormData;
@@ -35,8 +36,8 @@
     });
     const datos = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      if (resp.status === 401 && document.body.dataset.pagina === 'admin') {
-        window.location.href = ruta('/admin/entrar');
+      if (resp.status === 401 && document.body.dataset.pagina !== 'entrar') {
+        window.location.href = ruta('/');
       }
       const error = new Error(datos.error || `Error ${resp.status}`);
       error.status = resp.status;
@@ -108,7 +109,22 @@
     consultar();
   }
 
+  const VENTANA_ADMIN = 'sorteador-admin';
+
+  /**
+   * Abre (o trae adelante) la ventana del administrador. Hay que llamarla
+   * dentro de un clic: si no, el navegador la bloquea. Devuelve null si la
+   * bloqueó igual.
+   */
+  function abrirAdministrador() {
+    const ancho = Math.min(1200, screen.availWidth);
+    const alto = Math.min(860, screen.availHeight);
+    return window.open(ruta('/admin'), VENTANA_ADMIN, `popup,width=${ancho},height=${alto}`);
+  }
+
   window.api = api;
   window.rutaApi = ruta;
   window.escucharEventos = escuchar;
+  window.VENTANA_ADMIN = VENTANA_ADMIN;
+  window.abrirAdministrador = abrirAdministrador;
 })();

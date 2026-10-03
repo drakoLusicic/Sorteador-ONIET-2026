@@ -4,34 +4,50 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <title>Administrador del sorteo</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+  <title>Sorteador ONIET 30</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%B0%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body class="pagina-entrar">
-  <main class="bloque entrar">
-    <h1>Administrador del sorteo</h1>
+<body class="pagina-ingreso" data-pagina="entrar">
+  <!-- Es lo primero que aparece al entrar al sorteador: con el usuario y la
+       contraseña correctos se abren la pantalla (en esta ventana) y el
+       administrador (en otra). -->
+  <div class="fondo" aria-hidden="true"></div>
 
-    {% if sin_https %}
-      <p class="aviso-entrar">
-        Este sitio no está usando https, así que el navegador no va a guardar la sesión.
-        Entrá con <strong>https://</strong> o, si el sitio todavía no tiene certificado,
-        configurá <code>SORTEADOR_COOKIE_SEGURA=0</code>.
-      </p>
-    {% endif %}
-    <form method="post" class="form-entrar">
-      <label class="campo" for="usuario">Usuario</label>
-      <input id="usuario" name="usuario" type="text" value="{{ usuario }}" maxlength="50"
-             autocomplete="username" autocapitalize="off" spellcheck="false" required
-             {% if not usuario %}autofocus{% endif %}>
-      <label class="campo" for="clave">Contraseña</label>
-      <input id="clave" name="clave" type="password" autocomplete="current-password" required
-             {% if usuario %}autofocus{% endif %}>
-      {% if aviso %}<p class="error-entrar" role="alert">{{ aviso }}</p>{% endif %}
-      <button class="btn btn-principal" type="submit">Entrar</button>
+  <main class="ingreso">
+    <h1 class="titulo">
+      <img src="{{ url_for('static', filename='img/logos/oniet30.png') }}"
+           alt="ONIET 30 - Olimpiadas Nacionales - Edición Especial">
+    </h1>
+
+    <form id="form-ingreso" class="ingreso-tarjeta">
+      <h2 class="ingreso-titulo">🔑 Ingresar al sorteador</h2>
+      <p class="ingreso-texto">Al entrar se abren la ruleta y el administrador.</p>
+      {% if sin_https %}
+        <p class="ingreso-aviso">
+          Este sitio no está usando https, así que el navegador no va a guardar la sesión.
+          Entrá con <strong>https://</strong> o, si el sitio todavía no tiene certificado,
+          configurá <code>SORTEADOR_COOKIE_SEGURA=0</code>.
+        </p>
+      {% endif %}
+      <label class="ingreso-campo" for="usuario">Usuario</label>
+      <input id="usuario" type="text" maxlength="50" autocomplete="username" autocapitalize="off"
+             spellcheck="false" required autofocus>
+      <label class="ingreso-campo" for="clave">Contraseña</label>
+      <input id="clave" type="password" autocomplete="current-password" required>
+      <p id="aviso" class="ingreso-error" role="alert"></p>
+      <button id="btn-entrar" class="btn-ingreso" type="submit">Entrar</button>
     </form>
-
-    <p class="ayuda"><a href="{{ url_for('pantalla') }}">Ir a la pantalla del sorteador</a></p>
   </main>
+
+  <footer class="pie">
+    <img class="logo-ubp" src="{{ url_for('static', filename='img/logos/ubp.png') }}" alt="Universidad Blas Pascal">
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/entrar.js') }}"></script>
 </body>
 </html>

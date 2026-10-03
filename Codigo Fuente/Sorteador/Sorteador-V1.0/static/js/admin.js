@@ -98,7 +98,7 @@
     else if (!e.pantallas) motivo = 'Abrí la pantalla del sorteador para poder sortear.';
     else if (!e.participantes) motivo = 'Todavía no hay estudiantes inscriptos.';
     else if (!e.en_juego) motivo = 'No quedan participantes en juego.';
-    else if (!e.premio) motivo = 'No quedan premios sin entregar: agregá uno abajo.';
+    else if (!e.premio) motivo = 'No hay premios: agregá uno abajo.';
     el.motivo.textContent = motivo;
 
     el.btnContinuar.disabled = !(conectado && (e.sorteo === 'ganador' || (e.sorteo === 'sorteando' && !e.pantallas)));
@@ -109,6 +109,17 @@
     el.btnReiniciar.disabled = !(listo && e.ganadores);
   }
 
+  /** "Próximo" y a quién se entregó (o cuántas veces, con los nombres al pasar el mouse). */
+  function detallePremio(detalle, p, esActual) {
+    const partes = esActual ? ['Próximo'] : [];
+    const n = p.ganadores.length;
+    if (n === 1) partes.push(`Entregado a ${p.ganadores[0].nombre}`);
+    else if (n > 1) partes.push(`Entregado ${n} veces`);
+    detalle.textContent = partes.join(' · ');
+    detalle.title = n > 1 ? p.ganadores.map((g) => g.nombre).join('\n') : '';
+  }
+
+  /** Un premio se puede entregar más de una vez: los entregados se pueden volver a elegir. */
   function dibujarPremios() {
     const actual = estado && estado.premio ? estado.premio.id : null;
     // Mientras gira, el administrador tampoco ve a quién se entregó.
@@ -119,7 +130,6 @@
         const item = document.createElement('li');
         item.className = 'premio';
         item.classList.toggle('actual', p.id === actual);
-        item.classList.toggle('entregado', p.entregado);
 
         const etiqueta = document.createElement('label');
         const radio = document.createElement('input');
@@ -127,7 +137,6 @@
         radio.name = 'premio-actual';
         radio.value = p.id;
         radio.checked = p.id === actual;
-        radio.disabled = p.entregado;
         const nombre = document.createElement('span');
         nombre.className = 'premio-nombre';
         nombre.textContent = p.nombre;
@@ -136,8 +145,7 @@
         const detalle = document.createElement('span');
         detalle.className = 'premio-detalle';
         if (p.id === sorteando) detalle.textContent = 'Sorteando…';
-        else if (p.entregado) detalle.textContent = `Entregado a ${p.ganador}`;
-        else if (p.id === actual) detalle.textContent = 'Próximo';
+        else detallePremio(detalle, p, p.id === actual);
 
         const quitar = document.createElement('button');
         quitar.type = 'button';
@@ -146,7 +154,7 @@
         quitar.textContent = '✕';
         quitar.title = 'Quitar premio';
         quitar.setAttribute('aria-label', `Quitar ${p.nombre}`);
-        quitar.disabled = p.entregado; // la base no deja borrar un premio entregado
+        quitar.disabled = p.ganadores.length > 0; // la base no deja borrar un premio entregado
 
         item.append(etiqueta, detalle, quitar);
         return item;
