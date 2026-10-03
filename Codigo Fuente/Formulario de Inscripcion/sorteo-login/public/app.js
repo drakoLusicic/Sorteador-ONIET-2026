@@ -5,6 +5,11 @@ const confirmBtn = document.getElementById('confirm-btn');
 const cancelBtn = document.getElementById('cancel-btn');
 const statusMessage = document.getElementById('status-message');
 const nombreParcial = document.getElementById('nombre-parcial');
+const winnerDialog = document.getElementById('winner-dialog');
+const winnerStudentId = document.getElementById('winner-student-id');
+const winnerStudentName = document.getElementById('winner-student-name');
+const winnerPrize = document.getElementById('winner-prize');
+const winnerCloseBtn = document.getElementById('winner-close');
 
 const screens = {
   login: document.getElementById('screen-login'),
@@ -13,6 +18,10 @@ const screens = {
 };
 
 let currentDni = '';
+let winnerToken = '';
+let winnerPollingTimer = null;
+let winnerPollInProgress = false;
+const winnerPollIntervalMs = 5000;
 
 function setStatus(message, type = '') {
   statusMessage.textContent = message || '';
@@ -49,8 +58,58 @@ function isValidDni(value) {
 }
 
 function clearFields() {
+  stopWinnerPolling();
   dniInput.value = '';
   currentDni = '';
+}
+
+function stopWinnerPolling() {
+  if (winnerPollingTimer !== null) {
+    window.clearTimeout(winnerPollingTimer);
+    winnerPollingTimer = null;
+  }
+  winnerToken = '';
+}
+
+function startWinnerPolling(token) {
+  stopWinnerPolling();
+  winnerToken = token || '';
+  if (winnerToken) pollForWinner();
+}
+
+function showWinner(ganador) {
+  stopWinnerPolling();
+  winnerStudentId.textContent = String(ganador.estudianteId);
+  winnerStudentName.textContent = `${ganador.nombre} ${ganador.apellido}`.trim();
+  winnerPrize.textContent = ganador.premio;
+  winnerDialog.showModal();
+}
+
+async function pollForWinner() {
+  if (!winnerToken || winnerPollInProgress || winnerDialog.open) return;
+
+  winnerPollInProgress = true;
+  try {
+    const data = await requestJson('/api/ganador', { token: winnerToken });
+    if (data.ganador) {
+      showWinner(data.ganador);
+      return;
+    }
+  } catch (error) {
+    if (error.status === 401 && currentDni) {
+      try {
+        const verification = await requestJson('/api/verificar', { dni: currentDni });
+        winnerToken = verification.winnerToken || '';
+      } catch {
+        stopWinnerPolling();
+      }
+    }
+  } finally {
+    winnerPollInProgress = false;
+    if (winnerToken && !winnerDialog.open) {
+      winnerPollingTimer = window.setTimeout(pollForWinner, winnerPollIntervalMs);
+    }
+  }
 }
 
 async function requestJson(url, payload) {
@@ -65,7 +124,9 @@ async function requestJson(url, payload) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || 'Error del servidor');
+    const error = new Error(data.error || 'Error del servidor');
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -100,6 +161,7 @@ form.addEventListener('submit', async (event) => {
       currentDni = dni;
       showScreen('success');
       setStatus('Ya estás participando', 'success');
+      startWinnerPolling(data.winnerToken);
       return;
     }
 
@@ -126,6 +188,7 @@ confirmBtn.addEventListener('click', async () => {
     if (data.estado === 'confirmado') {
       showScreen('success');
       setStatus('Ya estás participando', 'success');
+      startWinnerPolling(data.winnerToken);
       return;
     }
 
@@ -142,6 +205,8 @@ cancelBtn.addEventListener('click', () => {
   setStatus('');
   showScreen('login');
 });
+
+winnerCloseBtn.addEventListener('click', () => winnerDialog.close());
 
 dniInput.addEventListener('input', () => {
   dniInput.value = normalizeDni(dniInput.value).slice(0, 8);

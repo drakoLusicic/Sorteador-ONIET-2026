@@ -301,6 +301,68 @@ button:disabled {
   letter-spacing: -0.03em;
 }
 
+.winner-dialog {
+  width: min(92vw, 420px);
+  max-height: min(88dvh, 620px);
+  padding: 0;
+  overflow: auto;
+  color: var(--text);
+  background: rgba(20, 17, 34, 0.96);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+.winner-dialog::backdrop {
+  background: rgba(5, 4, 15, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.winner-content {
+  padding: 1.75rem;
+}
+
+.winner-eyebrow {
+  margin: 0 0 0.4rem;
+  color: var(--amber);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.winner-content h2 {
+  margin: 0 0 1.25rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.winner-details {
+  margin: 0;
+}
+
+.winner-details div {
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--glass-border);
+}
+
+.winner-details dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.winner-details dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.winner-content .primary {
+  width: 100%;
+}
+
 @media (min-aspect-ratio: 4/3) {
   .bg {
     background: #05040f;
@@ -344,6 +406,10 @@ button:disabled {
 
   h1 {
     margin-bottom: 0.9rem;
+  }
+
+  .winner-content {
+    padding: 1.4rem 1.2rem;
   }
 }
 

@@ -52,6 +52,28 @@
       </section>
     </main>
 
+    <dialog id="winner-dialog" class="winner-dialog" aria-labelledby="winner-title">
+      <div class="winner-content">
+        <p class="winner-eyebrow">Resultado del sorteo</p>
+        <h2 id="winner-title">¡Ganaste!</h2>
+        <dl class="winner-details">
+          <div>
+            <dt>ID de estudiante</dt>
+            <dd id="winner-student-id"></dd>
+          </div>
+          <div>
+            <dt>Estudiante</dt>
+            <dd id="winner-student-name"></dd>
+          </div>
+          <div>
+            <dt>Premio</dt>
+            <dd id="winner-prize"></dd>
+          </div>
+        </dl>
+        <button id="winner-close" class="btn primary" type="button">Cerrar</button>
+      </div>
+    </dialog>
+
     <script src="app.js"></script>
   </body>
 </html>

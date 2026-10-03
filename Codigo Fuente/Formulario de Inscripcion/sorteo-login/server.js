@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const { parse } = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const { createPool } = require('./db/pool');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -28,6 +29,9 @@ const csvPath = path.resolve(process.env.CSV_PATH || path.join(dataDir, 'partici
 const useDatabase = Boolean(process.env.DB_HOST || process.env.DB_USER || process.env.DB_PASSWORD);
 const pool = useDatabase ? createPool() : null;
 let writeQueue = Promise.resolve();
+const winnerTokens = new Map();
+const winnerTokenLifetimeMs = 60 * 60 * 1000;
+const winnerPollMinimumIntervalMs = 4000;
 
 const exampleRows = [
   { dni: '20123456', nombre: 'Juan', apellido: 'Pérez', bandera: '0' },
@@ -143,7 +147,7 @@ async function ensureCsvFile() {
 async function findParticipant(dni) {
   if (pool) {
     const [rows] = await pool.execute(
-      'SELECT dni, nombre, apellido, inscripto AS bandera FROM estudiante WHERE dni = ? LIMIT 1',
+      'SELECT id, dni, nombre, apellido, inscripto AS bandera FROM estudiantes WHERE dni = ? LIMIT 1',
       [dni]
     );
     return rows[0] || null;
@@ -153,10 +157,63 @@ async function findParticipant(dni) {
   return rows.find((row) => normalizeDni(row.dni) === dni) || null;
 }
 
+function createWinnerToken(studentId) {
+  if (!pool || studentId === undefined || studentId === null) return null;
+
+  const now = Date.now();
+  for (const [token, session] of winnerTokens) {
+    if (session.expiresAt <= now) winnerTokens.delete(token);
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  winnerTokens.set(token, {
+    studentId,
+    expiresAt: now + winnerTokenLifetimeMs,
+    lastPollAt: 0
+  });
+  return token;
+}
+
+function requireWinnerToken(req, res, next) {
+  const token = req.body?.token;
+  const session = winnerTokens.get(token);
+
+  if (!session || session.expiresAt <= Date.now()) {
+    if (session) winnerTokens.delete(token);
+    return res.status(401).json({ error: 'Sesión vencida' });
+  }
+
+  const now = Date.now();
+  if (now - session.lastPollAt < winnerPollMinimumIntervalMs) {
+    return res.status(429).json({ error: 'Consulta demasiado frecuente' });
+  }
+
+  session.lastPollAt = now;
+  req.studentId = session.studentId;
+  return next();
+}
+
+async function findLatestWinner(studentId) {
+  if (!pool) return null;
+
+  const [rows] = await pool.execute(
+    `SELECT e.id AS estudianteId, e.nombre, e.apellido, p.nombre AS premio
+     FROM estudiantes AS e
+     INNER JOIN ganadores AS g ON g.id_estudiante = e.id
+     INNER JOIN premios AS p ON p.id = g.id_premio
+     WHERE e.id = ? AND e.inscripto = 1
+     ORDER BY g.fecha DESC, g.id DESC
+     LIMIT 1`,
+    [studentId]
+  );
+
+  return rows[0] || null;
+}
+
 async function confirmParticipant(dni) {
   if (pool) {
     const [updated] = await pool.execute(
-      'UPDATE estudiante SET inscripto = 1 WHERE dni = ? AND inscripto = 0',
+      'UPDATE estudiantes SET inscripto = 1 WHERE dni = ? AND inscripto = 0',
       [dni]
     );
 
@@ -165,7 +222,7 @@ async function confirmParticipant(dni) {
     }
 
     const [existing] = await pool.execute(
-      'SELECT dni FROM estudiante WHERE dni = ? LIMIT 1',
+      'SELECT dni FROM estudiantes WHERE dni = ? LIMIT 1',
       [dni]
     );
 
@@ -223,11 +280,20 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
-app.use('/api', apiLimiter);
 app.use(express.json({ limit: '4kb', strict: true, type: 'application/json' }));
 app.use(express.static(publicDir));
 
-app.post('/api/verificar', async (req, res) => {
+app.post('/api/ganador', requireWinnerToken, async (req, res) => {
+  try {
+    const ganador = await findLatestWinner(req.studentId);
+    return res.status(200).json({ ganador });
+  } catch (error) {
+    console.error('Error en /api/ganador:', error.code || error.name || 'Error', error.message);
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+app.post('/api/verificar', apiLimiter, async (req, res) => {
   try {
     const dni = normalizeDni(req.body?.dni);
 
@@ -244,7 +310,10 @@ app.post('/api/verificar', async (req, res) => {
     const bandera = String(persona.bandera || '0').trim();
 
     if (bandera === '1') {
-      return res.status(200).json({ estado: 'ya_participa' });
+      return res.status(200).json({
+        estado: 'ya_participa',
+        winnerToken: createWinnerToken(persona.id)
+      });
     }
 
     return res.status(200).json({
@@ -252,11 +321,12 @@ app.post('/api/verificar', async (req, res) => {
       nombreParcial: buildNombreParcial(persona)
     });
   } catch (error) {
+    console.error('Error en /api/verificar:', error.code || error.name || 'Error', error.message);
     return res.status(500).json({ error: 'Error del servidor' });
   }
 });
 
-app.post('/api/confirmar', async (req, res) => {
+app.post('/api/confirmar', apiLimiter, async (req, res) => {
   try {
     const dni = normalizeDni(req.body?.dni);
 
@@ -264,9 +334,14 @@ app.post('/api/confirmar', async (req, res) => {
       return res.status(400).json({ error: 'DNI inválido' });
     }
 
+    const persona = await findParticipant(dni);
     const result = await confirmParticipant(dni);
-    return res.status(result.status).json(result.body);
+    const body = result.status === 200 && result.body.estado === 'confirmado'
+      ? { ...result.body, winnerToken: createWinnerToken(persona?.id) }
+      : result.body;
+    return res.status(result.status).json(body);
   } catch (error) {
+    console.error('Error en /api/confirmar:', error.code || error.name || 'Error', error.message);
     return res.status(500).json({ error: 'Error del servidor' });
   }
 });
